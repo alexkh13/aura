@@ -59,7 +59,7 @@ Below are the detailed blueprints for each major screen, outlining their purpose
 
 #### **Illustrative Image: Home Screen & Wardrobe Screen**
 
-![Home Screen and Wardrobe Screen Blueprint](home_wardrobe_screens.png)
+![Home Screen and Wardrobe Screen Blueprint](home_wardrobe_screens.jpg)
 
 ---
 
@@ -85,7 +85,7 @@ Below are the detailed blueprints for each major screen, outlining their purpose
 
 #### **Illustrative Image: Item Detail Screen & Add New Item Screen**
 
-![Item Detail Screen and Add New Item Screen Blueprint](item_detail_add_item_screens.png)
+![Item Detail Screen and Add New Item Screen Blueprint](item_detail_add_item_screens.jpg)
 
 ---
 
@@ -123,7 +123,7 @@ Below are the detailed blueprints for each major screen, outlining their purpose
 
 #### **Illustrative Image: Outfit Detail Screen & Create New Outfit Screen**
 
-![Outfit Detail Screen and Create New Outfit Screen Blueprint](outfit_detail_create_outfit.png)
+![Outfit Detail Screen and Create New Outfit Screen Blueprint](outfit_detail_create_outfit.jpg)
 
 ---
 
@@ -150,7 +150,7 @@ Below are the detailed blueprints for each major screen, outlining their purpose
 
 #### **Illustrative Image: Discover Screen & Calendar Screen**
 
-![Discover Screen and Calendar Screen Blueprint](discover_calendar_screens.png)
+![Discover Screen and Calendar Screen Blueprint](discover_calendar_screens.jpg)
 
 ---
 
