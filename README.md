@@ -1,179 +1,290 @@
-# Aura Wardrobe App Blueprint
+Welcome to your new TanStack app! 
 
-## Project Overview
+# Getting Started
 
-Welcome to the blueprint for **Aura Wardrobe**, a simple and minimalistic mobile application designed to help users manage their clothing, create stylish outfits, and discover new fashion inspiration. This document outlines the core features, screen flows, and underlying design principles, providing a comprehensive overview of the app's structure and user experience.
+To run this application:
 
-## Vision
+```bash
+npm install
+npm run start
+```
 
-Aura Wardrobe aims to provide a clean, intuitive, and visually appealing platform for personal style management. The focus is on ease of use, enabling users to effortlessly catalog their wardrobe, combine items into outfits, plan their looks, and explore fashion trends, all within a beautifully minimalist interface.
+# Building For Production
 
-## Core Features
+To build this application for production:
 
-Aura Wardrobe is built around several key functionalities to streamline your fashion life:
+```bash
+npm run build
+```
 
-1.  **Wardrobe Management:** Organize and categorize all your clothing items with detailed information and photos.
-2.  **Outfit Creation & Planning:** Easily assemble new outfits, save them, and plan what to wear using an integrated calendar.
-3.  **Personalized Suggestions:** Get daily outfit recommendations tailored to your wardrobe and preferences.
-4.  **Style Discovery:** Explore curated fashion content, trends, and styling tips.
-5.  **User-Friendly Interface:** A clean, minimalistic design ensures a seamless and enjoyable user experience.
+## Testing
 
-## Screen Blueprints
+This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
 
-Below are the detailed blueprints for each major screen, outlining their purpose, layout, and key interactive elements.
+```bash
+npm run test
+```
 
----
+## Styling
 
-### 1. Splash Screen
+This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
 
-* **Purpose:** Provides initial brand identity upon app launch.
-* **Description:** Displays the app logo and name, smoothly transitioning to the Home screen.
 
----
 
-### 2. Onboarding Screens (First-Time User Experience)
 
-* **Purpose:** Guides new users through the app's primary benefits and functionalities.
-* **Description:** A series of brief introductory screens highlighting features like "Organize Your Style," "Create Perfect Outfits," and "Discover New Looks," with clear navigation and a "Get Started" call to action.
+## Routing
+This project uses [TanStack Router](https://tanstack.com/router). The initial setup is a file based router. Which means that the routes are managed as files in `src/routes`.
 
----
+### Adding A Route
 
-### 3. Home Screen (Dashboard)
+To add a new route to your application just add another a new file in the `./src/routes` directory.
 
-* **Purpose:** The central hub for quick access and an overview of your wardrobe activity.
-* **Key Elements:**
-    * Today's Outfit Suggestion.
-    * Quick Action buttons for adding items, creating outfits, and viewing the wardrobe.
-    * Recent outfits or recently added items.
-    * Persistent bottom navigation for core app sections.
+TanStack will automatically generate the content of the route file for you.
 
-### 4. Wardrobe Screen (Item List)
+Now that you have two routes you can use a `Link` component to navigate between them.
 
-* **Purpose:** Browse and manage all individual clothing items in your digital wardrobe.
-* **Key Elements:**
-    * Search, filter, and sort options for easy navigation.
-    * Grid or list view displaying item photos and basic details.
-    * Direct access to add new items.
+### Adding Links
 
----
+To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
 
-#### **Illustrative Image: Home Screen & Wardrobe Screen**
+```tsx
+import { Link } from "@tanstack/react-router";
+```
 
-![Home Screen and Wardrobe Screen Blueprint](home_wardrobe_screens.png)
+Then anywhere in your JSX you can use it like so:
 
----
+```tsx
+<Link to="/about">About</Link>
+```
 
-### 5. Item Detail Screen
+This will create a link that will navigate to the `/about` route.
 
-* **Purpose:** View and edit comprehensive details of a specific clothing item.
-* **Key Elements:**
-    * Large item photo.
-    * Detailed information: name, category, color, brand, size, season, tags, notes.
-    * Section showing which outfits the item is part of.
-    * Options to edit or delete the item.
+More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
 
----
+### Using A Layout
 
-### 6. Add New Item Screen
+In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you use the `<Outlet />` component.
 
-* **Purpose:** Step-by-step guided process to catalog a new clothing item.
-* **Key Elements:**
-    * Photo upload (take photo or choose from gallery).
-    * Form fields for all item details: name, category, color, brand, size, season, tags, and notes.
+Here is an example layout that includes a header:
 
----
+```tsx
+import { Outlet, createRootRoute } from '@tanstack/react-router'
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
-#### **Illustrative Image: Item Detail Screen & Add New Item Screen**
+import { Link } from "@tanstack/react-router";
 
-![Item Detail Screen and Add New Item Screen Blueprint](item_detail_add_item_screens.png)
+export const Route = createRootRoute({
+  component: () => (
+    <>
+      <header>
+        <nav>
+          <Link to="/">Home</Link>
+          <Link to="/about">About</Link>
+        </nav>
+      </header>
+      <Outlet />
+      <TanStackRouterDevtools />
+    </>
+  ),
+})
+```
 
----
+The `<TanStackRouterDevtools />` component is not required so you can remove it if you don't want it in your layout.
 
-### 7. Outfits Screen (Outfit List)
+More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
 
-* **Purpose:** View and manage all your saved outfit combinations.
-* **Key Elements:**
-    * Search, filter, and sort options.
-    * Grid view displaying outfit photos and names.
-    * Direct access to create new outfits.
 
----
+## Data Fetching
 
-### 8. Outfit Detail Screen
+There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
 
-* **Purpose:** View and edit comprehensive details of a specific outfit.
-* **Key Elements:**
-    * Large outfit photo (composite or styled flat lay).
-    * Outfit name, occasion, season, weather recommendation, tags, and notes.
-    * Thumbnails of all individual clothing items within the outfit.
-    * Actions to "Wear This Outfit" (add to calendar), share, edit, or delete.
+For example:
 
----
+```tsx
+const peopleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/people",
+  loader: async () => {
+    const response = await fetch("https://swapi.dev/api/people");
+    return response.json() as Promise<{
+      results: {
+        name: string;
+      }[];
+    }>;
+  },
+  component: () => {
+    const data = peopleRoute.useLoaderData();
+    return (
+      <ul>
+        {data.results.map((person) => (
+          <li key={person.name}>{person.name}</li>
+        ))}
+      </ul>
+    );
+  },
+});
+```
 
-### 9. Create New Outfit Screen
+Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
 
-* **Purpose:** A guided interface to build and save new outfit combinations.
-* **Key Elements:**
-    * An "Outfit Canvas" area to visualize selected items.
-    * Buttons to easily add different categories of items (top, bottom, shoes, accessory) from your wardrobe.
-    * Display of selected items and form fields for outfit details (name, occasion, season, notes).
-    * Option to generate a composite outfit photo.
+### React-Query
 
----
+React-Query is an excellent addition or alternative to route loading and integrating it into you application is a breeze.
 
-#### **Illustrative Image: Outfit Detail Screen & Create New Outfit Screen**
+First add your dependencies:
 
-![Outfit Detail Screen and Create New Outfit Screen Blueprint](outfit_detail_create_outfit.png)
+```bash
+npm install @tanstack/react-query @tanstack/react-query-devtools
+```
 
----
+Next we'll need to create a query client and provider. We recommend putting those in `main.tsx`.
 
-### 10. Discover Screen (Style Inspiration / Feed)
+```tsx
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-* **Purpose:** Provides curated fashion content, trends, and styling inspiration.
-* **Key Elements:**
-    * "Today's Trend" highlight.
-    * Curated outfit carousels.
-    * Style articles and tips.
-    * (Optional) Links to shop similar looks.
+// ...
 
----
+const queryClient = new QueryClient();
 
-### 11. Calendar Screen (Outfit Planner)
+// ...
 
-* **Purpose:** Plan and track your outfits for upcoming days.
-* **Key Elements:**
-    * Standard calendar grid view.
-    * Visual indicators (thumbnails) for days with planned outfits.
-    * Day Detail View to manage or change outfits for a specific date.
+if (!rootElement.innerHTML) {
+  const root = ReactDOM.createRoot(rootElement);
 
----
+  root.render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  );
+}
+```
 
-#### **Illustrative Image: Discover Screen & Calendar Screen**
+You can also add TanStack Query Devtools to the root route (optional).
 
-![Discover Screen and Calendar Screen Blueprint](discover_calendar_screens.png)
+```tsx
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
----
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <ReactQueryDevtools buttonPosition="top-right" />
+      <TanStackRouterDevtools />
+    </>
+  ),
+});
+```
 
-### 12. Settings Screen
+Now you can use `useQuery` to fetch your data.
 
-* **Purpose:** Configure app preferences and manage user account details.
-* **Key Elements:**
-    * Profile and account settings.
-    * Wardrobe management options (categories, brands, backup).
-    * Notification toggles (outfit reminders, trend alerts).
-    * General app settings (theme, help, about, log out).
+```tsx
+import { useQuery } from "@tanstack/react-query";
 
----
+import "./App.css";
 
-## Design Principles
+function App() {
+  const { data } = useQuery({
+    queryKey: ["people"],
+    queryFn: () =>
+      fetch("https://swapi.dev/api/people")
+        .then((res) => res.json())
+        .then((data) => data.results as { name: string }[]),
+    initialData: [],
+  });
 
-Aura Wardrobe prioritizes a **minimalist, clean, and intuitive design** across all screens:
+  return (
+    <div>
+      <ul>
+        {data.map((person) => (
+          <li key={person.name}>{person.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-* **Typography:** Utilizes clean, sans-serif fonts with a clear hierarchy for readability.
-* **Color Palette:** A restrained palette primarily featuring soft whites/light grays, accented with one or two subtle brand colors for interaction elements.
-* **Whitespace:** Generous use of whitespace ensures screens feel uncluttered and airy, improving focus on content.
-* **Iconography:** Simple, universally recognizable line icons are used for navigation and actions.
-* **Visual Focus:** High-quality images of clothing items and outfits are central to the user experience, displayed prominently.
-* **Ease of Use:** User flows are designed to be straightforward, minimizing steps and cognitive load.
+export default App;
+```
 
-This blueprint serves as a foundational document for the design and development of the Aura Wardrobe app.
+You can find out everything you need to know on how to use React-Query in the [React-Query documentation](https://tanstack.com/query/latest/docs/framework/react/overview).
+
+## State Management
+
+Another common requirement for React applications is state management. There are many options for state management in React. TanStack Store provides a great starting point for your project.
+
+First you need to add TanStack Store as a dependency:
+
+```bash
+npm install @tanstack/store
+```
+
+Now let's create a simple counter in the `src/App.tsx` file as a demonstration.
+
+```tsx
+import { useStore } from "@tanstack/react-store";
+import { Store } from "@tanstack/store";
+import "./App.css";
+
+const countStore = new Store(0);
+
+function App() {
+  const count = useStore(countStore);
+  return (
+    <div>
+      <button onClick={() => countStore.setState((n) => n + 1)}>
+        Increment - {count}
+      </button>
+    </div>
+  );
+}
+
+export default App;
+```
+
+One of the many nice features of TanStack Store is the ability to derive state from other state. That derived state will update when the base state updates.
+
+Let's check this out by doubling the count using derived state.
+
+```tsx
+import { useStore } from "@tanstack/react-store";
+import { Store, Derived } from "@tanstack/store";
+import "./App.css";
+
+const countStore = new Store(0);
+
+const doubledStore = new Derived({
+  fn: () => countStore.state * 2,
+  deps: [countStore],
+});
+doubledStore.mount();
+
+function App() {
+  const count = useStore(countStore);
+  const doubledCount = useStore(doubledStore);
+
+  return (
+    <div>
+      <button onClick={() => countStore.setState((n) => n + 1)}>
+        Increment - {count}
+      </button>
+      <div>Doubled - {doubledCount}</div>
+    </div>
+  );
+}
+
+export default App;
+```
+
+We use the `Derived` class to create a new store that is derived from another store. The `Derived` class has a `mount` method that will start the derived store updating.
+
+Once we've created the derived store we can use it in the `App` component just like we would any other store using the `useStore` hook.
+
+You can find out everything you need to know on how to use TanStack Store in the [TanStack Store documentation](https://tanstack.com/store/latest).
+
+# Demo files
+
+Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
+
+# Learn More
+
+You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
