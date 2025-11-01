@@ -1,17 +1,6 @@
-import { createRxDatabase, addRxPlugin } from 'rxdb'
-import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie'
-import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
-import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv'
-import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 import type { AuraDatabase } from '@/types'
 
-// Add migration plugin for schema versioning
-addRxPlugin(RxDBMigrationSchemaPlugin)
-
-// Add dev-mode plugin to show full error messages
-if (import.meta.env.DEV) {
-  addRxPlugin(RxDBDevModePlugin)
-}
+// Dynamic imports will be used to prevent server-side execution
 
 // RxDB Schemas
 const profileSchema = {
@@ -201,10 +190,28 @@ export async function initDatabase(): Promise<AuraDatabase> {
     try {
       console.log('🔧 Initializing RxDB database...')
 
+      // Dynamically import RxDB modules (only in browser)
+      const { createRxDatabase, addRxPlugin } = await import('rxdb')
+      const { getRxStorageDexie } = await import('rxdb/plugins/storage-dexie')
+      const { RxDBMigrationSchemaPlugin } = await import('rxdb/plugins/migration-schema')
+
+      // Add migration plugin
+      addRxPlugin(RxDBMigrationSchemaPlugin)
+
+      // Add dev-mode plugin in development
+      if (import.meta.env.DEV) {
+        const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode')
+        addRxPlugin(RxDBDevModePlugin)
+      }
+
       // Wrap storage with validation in dev mode
-      const storage = import.meta.env.DEV
-        ? wrappedValidateAjvStorage({ storage: getRxStorageDexie() })
-        : getRxStorageDexie()
+      let storage
+      if (import.meta.env.DEV) {
+        const { wrappedValidateAjvStorage } = await import('rxdb/plugins/validate-ajv')
+        storage = wrappedValidateAjvStorage({ storage: getRxStorageDexie() })
+      } else {
+        storage = getRxStorageDexie()
+      }
 
       const db = await createRxDatabase<AuraDatabase>({
         name: 'aurawardrobedb',
@@ -297,6 +304,10 @@ export async function initDatabase(): Promise<AuraDatabase> {
 
 // Get database instance
 export async function getDatabase(): Promise<AuraDatabase> {
+  // Prevent database initialization on server-side
+  if (typeof window === 'undefined') {
+    throw new Error('Database can only be accessed in the browser')
+  }
   return initDatabase()
 }
 
