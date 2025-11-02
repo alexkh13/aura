@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Shirt, ChevronLeft, X } from 'lucide-react'
-import { useState } from 'react'
+import { createFileRoute, useNavigate, useLocation } from '@tanstack/react-router'
+import { Shirt, ChevronLeft, X, Sparkles } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useItems, useCreateOutfit } from '@/hooks/useData'
 import { useProfile } from '@/hooks/useProfile'
 
@@ -8,6 +8,7 @@ export const Route = createFileRoute('/outfits/new')({ component: CreateOutfitPa
 
 function CreateOutfitPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { activeProfile } = useProfile()
   const { data: items } = useItems(activeProfile?.id)
   const createOutfit = useCreateOutfit()
@@ -21,6 +22,38 @@ function CreateOutfitPage() {
     notes: ''
   })
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
+  const [aiGenerated, setAiGenerated] = useState(false)
+
+  // Pre-select items and fill form data if passed from navigation state
+  useEffect(() => {
+    const state = location.state as {
+      preSelectedItemIds?: string[]
+      aiGeneratedData?: {
+        name: string
+        season: string
+        occasion?: string
+        weather?: string
+        tags?: string
+        notes?: string
+      }
+    } | undefined
+
+    if (state?.preSelectedItemIds && state.preSelectedItemIds.length > 0) {
+      setSelectedItemIds(state.preSelectedItemIds)
+    }
+
+    if (state?.aiGeneratedData) {
+      setFormData({
+        name: state.aiGeneratedData.name || '',
+        season: state.aiGeneratedData.season || '',
+        occasion: state.aiGeneratedData.occasion || '',
+        weather: state.aiGeneratedData.weather || '',
+        tags: state.aiGeneratedData.tags || '',
+        notes: state.aiGeneratedData.notes || ''
+      })
+      setAiGenerated(true)
+    }
+  }, [location.state])
 
   const toggleItem = (itemId: string) => {
     setSelectedItemIds(prev =>
@@ -81,6 +114,12 @@ function CreateOutfitPage() {
               Save
             </button>
           </div>
+          {aiGenerated && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-purple-600 dark:text-purple-400">
+              <Sparkles className="w-3 h-3" />
+              AI-generated suggestions • Review and edit as needed
+            </div>
+          )}
         </div>
 
         <div className="px-4 py-6 space-y-6">
