@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate, Outlet } from '@tanstack/react-router'
-import { ChevronLeft, Edit, User, Settings, Shirt } from 'lucide-react'
-import { useOutfitWithItems } from '@/hooks/useData'
+import { ChevronLeft, Edit, MoreVertical, Shirt, Trash2 } from 'lucide-react'
+import { useOutfitWithItems, useDeleteOutfit } from '@/hooks/useData'
+import { useState, useRef, useEffect } from 'react'
 
 export const Route = createFileRoute('/outfits/$outfitId')({
   component: OutfitDetailPage,
@@ -10,6 +11,38 @@ function OutfitDetailPage() {
   const navigate = useNavigate()
   const { outfitId } = Route.useParams()
   const { data: outfit, isLoading, error } = useOutfitWithItems(outfitId)
+  const deleteOutfit = useDeleteOutfit()
+
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close more menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setShowMoreMenu(false)
+      }
+    }
+
+    if (showMoreMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showMoreMenu])
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this outfit? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      await deleteOutfit.mutateAsync(outfitId)
+      navigate({ to: '/outfits' })
+    } catch (err) {
+      console.error('Failed to delete outfit:', err)
+      alert('Failed to delete outfit')
+    }
+  }
 
   if (isLoading) {
     return (
@@ -54,22 +87,34 @@ function OutfitDetailPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate({ to: '/outfits/$outfitId/edit', params: { outfitId } })}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Edit"
               >
                 <Edit className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
-              <button
-                onClick={() => {/* TODO: Implement user profile */}}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-              >
-                <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-              <button
-                onClick={() => {/* TODO: Implement settings */}}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-              >
-                <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  onClick={() => setShowMoreMenu(!showMoreMenu)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  title="More options"
+                >
+                  <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </button>
+                {showMoreMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20">
+                    <button
+                      onClick={() => {
+                        setShowMoreMenu(false)
+                        handleDelete()
+                      }}
+                      className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Outfit
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

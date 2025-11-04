@@ -72,38 +72,124 @@ Important guidelines:
 
 Return ONLY the JSON object, no additional text.`
 
+
+/**
+ * Crop an image based on pixel bounding box coordinates
+ */
+async function cropImageByBoundingBox(
+  imageDataUrl: string,
+  boundingBox: { x: number; y: number; width: number; height: number }
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      console.log('✂️ Cropping image with bounding box (pixels):', boundingBox)
+
+      const img = new Image()
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+
+          if (!ctx) {
+            throw new Error('Failed to get canvas context')
+          }
+
+          // Use pixel coordinates directly, just clamp to image bounds
+          const cropX = Math.max(0, Math.floor(boundingBox.x))
+          const cropY = Math.max(0, Math.floor(boundingBox.y))
+          const cropWidth = Math.min(
+            img.width - cropX,
+            Math.ceil(boundingBox.width)
+          )
+          const cropHeight = Math.min(
+            img.height - cropY,
+            Math.ceil(boundingBox.height)
+          )
+
+          console.log(`📐 Image size: ${img.width}x${img.height}px`)
+          console.log(`📏 Crop region: (${cropX}, ${cropY}) ${cropWidth}x${cropHeight}px`)
+          console.log(`📊 Coverage: ${((cropWidth * cropHeight) / (img.width * img.height) * 100).toFixed(1)}% of original`)
+
+          // Validate crop dimensions
+          if (cropWidth <= 0 || cropHeight <= 0) {
+            throw new Error('Invalid crop dimensions')
+          }
+
+          // Set canvas to cropped dimensions
+          canvas.width = cropWidth
+          canvas.height = cropHeight
+
+          // Draw the cropped portion
+          ctx.drawImage(
+            img,
+            cropX, cropY, cropWidth, cropHeight,  // Source rectangle
+            0, 0, cropWidth, cropHeight            // Destination rectangle
+          )
+
+          // Convert to data URL
+          const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.95)
+          console.log('✅ Image cropped successfully:', croppedDataUrl.length, 'bytes')
+          resolve(croppedDataUrl)
+        } catch (error) {
+          console.error('❌ Error during cropping operation:', error)
+          reject(error)
+        }
+      }
+
+      img.onerror = () => {
+        const error = new Error('Failed to load image for cropping')
+        console.error('❌', error.message)
+        reject(error)
+      }
+
+      img.src = imageDataUrl
+    } catch (error) {
+      console.error('❌ Error setting up image crop:', error)
+      reject(error)
+    }
+  })
+}
+
 /**
  * Generate a clean product image for a garment using Gemini 2.5 Flash Image
+ * Input is ONLY the cropped image - no metadata to avoid bias
  */
 async function generateCleanProductImage(
-  garmentDescription: string,
-  originalImageData: string,
+  croppedImageData: string,
   progressCallback?: (message: string, progress: number) => void
 ): Promise<string> {
   try {
-    console.log('🎨 Starting image generation for:', garmentDescription)
+    console.log('🎨 Starting unbiased image generation from cropped visual input only')
 
     const ai = initializeGemini()
     const model = ai.getGenerativeModel({
       model: 'gemini-2.5-flash-image',
     })
 
-    // Create prompt for clean product shot based on the original image
-    const prompt = `Edit this clothing image to create a professional square (1:1 ratio) product photo.
+    // Generic prompt - no metadata, purely visual extraction
+    const prompt = `Extract the clothing/footwear item from this image and present it as a clean e-commerce product photo.
 
-Target item: ${garmentDescription}
+Remove any background, people, or context. Display the item centered on pure white background. High-resolution, professional lighting, suitable for online fashion catalog.
 
-Edits needed:
-- Remove the background and replace with clean white/neutral background
-- Remove any people from the image
-- Keep ONLY the clothing item: ${garmentDescription}
-- IMPORTANT: Center the garment perfectly in the middle of the square frame
-- IMPORTANT: Make the image square (1:1 aspect ratio)
-- Position the item so it fills about 70-80% of the frame
-- Ensure professional studio lighting from all angles
-- Create a clean product catalog style photo
-- Maintain the original garment's appearance, colors, and details
-- The garment should be the absolute center focus, perfectly balanced in the square frame`
+General Requirements:
+- Remove background and any people/models completely
+- Pure white background (#FFFFFF)
+- Center in square (1:1) format
+- Professional catalog-quality result
+- Keep all details, textures, and patterns exactly as they appear
+
+IMPORTANT - Product Type Specific Angles:
+- For SHOES/FOOTWEAR (sneakers, boots, sandals, heels, etc.):
+  * If it's a PAIR of shoes: Arrange them side-by-side at a 3/4 angle view (not flat top-down)
+  * Position: Slightly angled toward camera showing both the side profile and front/toe area
+  * Best showcase angle: 30-45 degree angle that reveals shape, sole, and design details
+  * Keep BOTH shoes visible if it's a pair
+  * This angle is standard for e-commerce shoe photography and best showcases the product
+
+- For CLOTHING (shirts, pants, jackets, dresses, etc.):
+  * Preserve natural garment shape with realistic fabric folds and drape
+  * Front-facing flat lay or hanging presentation
+  * Natural fabric texture and structure visible`
 
     console.log('📤 Sending image generation request with 1:1 aspect ratio...')
 
@@ -115,7 +201,7 @@ Edits needed:
           parts: [
             {
               inlineData: {
-                data: originalImageData.split(',')[1],
+                data: croppedImageData.split(',')[1],
                 mimeType: 'image/jpeg',
               },
             },
@@ -126,9 +212,9 @@ Edits needed:
         },
       ],
       generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
+        temperature: 0, // Zero creativity - pure extraction and preservation
+        topK: 1,
+        topP: 1,
         responseModalities: ['Image'],
         // @ts-ignore - imageConfig not in type definitions yet
         imageConfig: {
@@ -156,27 +242,211 @@ Edits needed:
         const generatedImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
         console.log('📸 Generated image size:', generatedImage.length, 'bytes')
 
-        // Verify dimensions by loading image
-        const img = new Image()
-        img.onload = () => {
-          console.log('📐 Image dimensions:', img.width, 'x', img.height, `(${img.width === img.height ? '✅ Square!' : '❌ Not square'})`)
-        }
-        img.src = generatedImage
+        // Validate the generated image quality
+        await new Promise<void>((resolve, reject) => {
+          const img = new Image()
+          img.onload = () => {
+            const aspectRatio = img.width / img.height
+            const isSquare = Math.abs(aspectRatio - 1) < 0.1
+
+            console.log('📐 Image dimensions:', img.width, 'x', img.height, `(${isSquare ? '✅ Square!' : '⚠️ Not square'})`)
+
+            if (!isSquare) {
+              console.warn('⚠️ Generated image is not square - aspect ratio:', aspectRatio.toFixed(2))
+            }
+
+            if (img.width < 512 || img.height < 512) {
+              console.warn('⚠️ Generated image resolution too low:', img.width, 'x', img.height)
+            } else {
+              console.log('✅ Image quality validated')
+            }
+
+            resolve()
+          }
+          img.onerror = () => {
+            console.error('❌ Failed to load generated image for validation')
+            reject(new Error('Image validation failed'))
+          }
+          img.src = generatedImage
+        })
 
         return generatedImage
       }
     }
 
-    console.warn('⚠️ No image in response, using original')
-    // Fallback to original if generation failed
-    return originalImageData
+    console.warn('⚠️ No image in response, using cropped input')
+    // Fallback to cropped input if generation failed
+    return croppedImageData
   } catch (error) {
-    console.error('❌ Image generation failed, using original:', error)
+    console.error('❌ Image generation failed, using cropped input:', error)
     if (error instanceof Error) {
       console.error('Error message:', error.message)
       console.error('Error stack:', error.stack)
     }
-    return originalImageData
+    return croppedImageData
+  }
+}
+
+/**
+ * Extract metadata for multiple garments WITHOUT generating images
+ * Returns metadata with bounding boxes for each detected garment
+ */
+export async function extractMultipleGarmentsMetadata(
+  imageFile: File,
+  progressCallback?: (message: string, progress: number) => void
+): Promise<Array<any>> {
+  try {
+    progressCallback?.('Initializing Gemini AI...', 5)
+
+    const ai = initializeGemini()
+    const model = ai.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        temperature: 0,
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 8192,
+      },
+    })
+
+    progressCallback?.('Converting image...', 15)
+    const imageData = await fileToBase64(imageFile)
+
+    progressCallback?.('Analyzing photo for garments...', 30)
+
+    const multiGarmentPrompt = `You are an expert fashion AI and computer vision assistant.
+
+Your task is to analyze the provided image and identify ALL distinct garments. For each garment, provide metadata and a precise bounding box in PIXELS.
+
+Format your response as a JSON array. Each object represents ONE garment and must follow this schema:
+
+[
+  {
+    "name": "string (garment type: 'T-Shirt', 'Jeans', 'Sneakers', etc.)",
+    "category": "string (Top|Bottom|Dress|Outerwear|Shoes|Accessories|Activewear|Other)",
+    "color": "string (primary color)",
+    "secondaryColors": ["array of additional colors or empty"],
+    "material": "string (cotton|denim|wool|leather|polyester|unknown)",
+    "pattern": "string (solid|striped|floral|checkered|polka-dot|geometric)",
+    "style": "string (casual|formal|sporty|elegant|business|vintage)",
+    "occasion": "string (everyday|work|party|gym|formal-event)",
+    "season": "string (summer|winter|spring|fall|all-season)",
+    "tags": "string (space-separated hashtags: '#casual #blue #summer')",
+    "notes": "string (brief description of unique features)",
+    "confidence": number (0.0-1.0, your confidence in this detection),
+    "boundingBox": {
+      "x": integer (left edge in pixels),
+      "y": integer (top edge in pixels),
+      "width": integer (box width in pixels),
+      "height": integer (box height in pixels)
+    }
+  }
+]
+
+Instructions:
+• Identify each visible garment separately
+• PAIRS (shoes, gloves, socks): ONE item with ONE box encompassing BOTH pieces
+• Bounding boxes: Add 10-15% padding around each garment
+• All pixel values must be positive integers
+• name: Simple type only (no colors/brands in the name)
+• confidence: Be honest about detection quality
+
+Examples:
+• T-shirt: {"x": 152, "y": 158, "width": 496, "height": 224}
+• Shoe pair: {"x": 3, "y": 319, "width": 794, "height": 112}
+• Dress: {"x": 151, "y": 53, "width": 298, "height": 694}
+
+Return ONLY the JSON array.`
+
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          data: imageData.split(',')[1],
+          mimeType: imageFile.type,
+        },
+      },
+      multiGarmentPrompt,
+    ])
+
+    progressCallback?.('Processing response...', 80)
+
+    const response = await result.response
+    console.log('📦 Full response object:', response)
+    console.log('🔍 Response candidates:', response.candidates)
+
+    const text = response.text()
+    console.log('🔍 Raw Gemini response:', text)
+    console.log('📏 Response length:', text.length)
+
+    // Check for blocked content
+    if (!text || text.length === 0) {
+      console.error('❌ Empty response from Gemini')
+      console.error('Response object:', JSON.stringify(response, null, 2))
+
+      // Check if content was blocked
+      const candidate = response.candidates?.[0]
+      if (candidate?.finishReason) {
+        console.error('Finish reason:', candidate.finishReason)
+      }
+      if (candidate?.safetyRatings) {
+        console.error('Safety ratings:', candidate.safetyRatings)
+      }
+
+      throw new Error('Gemini returned empty response. Check console for details.')
+    }
+
+    // Extract JSON array from response
+    const jsonMatch = text.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) {
+      console.error('❌ Failed to extract JSON array from response')
+      console.error('Response text:', text.substring(0, 500))
+      throw new Error(`Invalid response format from Gemini. Response: ${text.substring(0, 200)}`)
+    }
+
+    console.log('✅ Extracted JSON:', jsonMatch[0].substring(0, 200))
+    const garments = JSON.parse(jsonMatch[0])
+    console.log(`✅ Parsed ${garments.length} garments`)
+
+    progressCallback?.('Metadata extraction complete!', 100)
+
+    // Return garments with metadata including bounding boxes
+    return garments.map((garment: any) => ({
+      name: garment.name || 'Clothing Item',
+      category: garment.category || 'Other',
+      color: garment.color || 'Unknown',
+      tags: garment.tags || '',
+      notes: garment.notes || '',
+      confidence: garment.confidence || 0.9,
+      metadata: {
+        style: garment.style,
+        occasion: garment.occasion,
+        season: garment.season,
+        material: garment.material,
+        pattern: garment.pattern,
+        secondaryColors: garment.secondaryColors,
+        boundingBox: garment.boundingBox,
+      },
+    }))
+  } catch (error) {
+    console.error('Metadata extraction failed:', error)
+    throw error
+  }
+}
+
+/**
+ * Generate clean product image from a data URL (cropped image)
+ */
+export async function generateCleanProductImageFromData(
+  imageDataUrl: string,
+  progressCallback?: (message: string, progress: number) => void
+): Promise<string> {
+  try {
+    progressCallback?.('Generating clean product image...', 10)
+    return await generateCleanProductImage(imageDataUrl, progressCallback)
+  } catch (error) {
+    console.error('Image generation failed:', error)
+    // Return original on failure
+    return imageDataUrl
   }
 }
 
@@ -193,12 +463,12 @@ export async function extractMultipleGarments(
 
     const ai = initializeGemini()
     const model = ai.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
-        temperature: 0.4,
-        topK: 32,
+        temperature: 0,
+        topK: 1,
         topP: 1,
-        maxOutputTokens: 2048, // More tokens for multiple items
+        maxOutputTokens: 8192, // More tokens for multiple items
       },
     })
 
@@ -207,36 +477,49 @@ export async function extractMultipleGarments(
 
     progressCallback?.('Analyzing photo for garments...', 30)
 
-    const multiGarmentPrompt = `You are a fashion expert analyzing this photo. Identify ALL separate clothing items visible in the image.
+    const multiGarmentPrompt = `You are an expert fashion AI and computer vision assistant.
 
-For EACH distinct garment, provide detailed metadata.
+Your task is to analyze the provided image and identify ALL distinct garments. For each garment, provide metadata and a precise bounding box in PIXELS.
 
-IMPORTANT:
-- If this is a photo of a person wearing clothes, identify each visible garment separately (shirt, pants, jacket, etc.)
-- If this is a flat-lay or product photo showing multiple items, analyze each one
-- If only ONE item is visible, return an array with just that one item
-- Do NOT combine multiple garments into one entry
-
-Respond with a JSON array where each object represents ONE garment:
+Format your response as a JSON array. Each object represents ONE garment and must follow this schema:
 
 [
   {
-    "name": "Concise item name",
-    "category": "Top|Bottom|Dress|Outerwear|Shoes|Accessories|Activewear|Other",
-    "color": "Primary color",
-    "secondaryColors": ["Additional colors"],
-    "style": "casual|formal|sporty|elegant|etc",
-    "occasion": "everyday|work|party|gym|etc",
-    "season": "summer|winter|spring|fall|all-season",
-    "tags": "#tag1 #tag2 #tag3",
-    "notes": "Brief description",
-    "material": "fabric type or 'unknown'",
-    "pattern": "solid|striped|floral|checkered|etc",
-    "confidence": 0.95
+    "name": "string (garment type: 'T-Shirt', 'Jeans', 'Sneakers', etc.)",
+    "category": "string (Top|Bottom|Dress|Outerwear|Shoes|Accessories|Activewear|Other)",
+    "color": "string (primary color)",
+    "secondaryColors": ["array of additional colors or empty"],
+    "material": "string (cotton|denim|wool|leather|polyester|unknown)",
+    "pattern": "string (solid|striped|floral|checkered|polka-dot|geometric)",
+    "style": "string (casual|formal|sporty|elegant|business|vintage)",
+    "occasion": "string (everyday|work|party|gym|formal-event)",
+    "season": "string (summer|winter|spring|fall|all-season)",
+    "tags": "string (space-separated hashtags: '#casual #blue #summer')",
+    "notes": "string (brief description of unique features)",
+    "confidence": number (0.0-1.0, your confidence in this detection),
+    "boundingBox": {
+      "x": integer (left edge in pixels),
+      "y": integer (top edge in pixels),
+      "width": integer (box width in pixels),
+      "height": integer (box height in pixels)
+    }
   }
 ]
 
-Return ONLY the JSON array, no additional text.`
+Instructions:
+• Identify each visible garment separately
+• PAIRS (shoes, gloves, socks): ONE item with ONE box encompassing BOTH pieces
+• Bounding boxes: Add 10-15% padding around each garment
+• All pixel values must be positive integers
+• name: Simple type only (no colors/brands in the name)
+• confidence: Be honest about detection quality
+
+Examples:
+• T-shirt: {"x": 152, "y": 158, "width": 496, "height": 224}
+• Shoe pair: {"x": 3, "y": 319, "width": 794, "height": 112}
+• Dress: {"x": 151, "y": 53, "width": 298, "height": 694}
+
+Return ONLY the JSON array.`
 
     const result = await model.generateContent([
       {
@@ -253,13 +536,20 @@ Return ONLY the JSON array, no additional text.`
     const response = await result.response
     const text = response.text()
 
+    console.log('🔍 Raw Gemini response:', text)
+    console.log('📏 Response length:', text.length)
+
     // Extract JSON array from response
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) {
-      throw new Error('Invalid response format from Gemini')
+      console.error('❌ Failed to extract JSON array from response')
+      console.error('Response text:', text.substring(0, 500))
+      throw new Error(`Invalid response format from Gemini. Response: ${text.substring(0, 200)}`)
     }
 
+    console.log('✅ Extracted JSON:', jsonMatch[0].substring(0, 200))
     const garments = JSON.parse(jsonMatch[0])
+    console.log(`✅ Parsed ${garments.length} garments`)
     const originalImageUrl = await fileToDataURL(imageFile)
 
     // Generate clean product images for each garment
@@ -269,17 +559,54 @@ Return ONLY the JSON array, no additional text.`
 
     for (let i = 0; i < garments.length; i++) {
       const garment = garments[i]
-      const garmentDescription = `${garment.name}, ${garment.color} ${garment.material || ''} ${garment.pattern || ''} ${garment.category}`.trim()
 
       const progressPercent = 60 + Math.floor((i / garments.length) * 35)
       progressCallback?.(`Generating image ${i + 1}/${garments.length}...`, progressPercent)
 
-      // Generate clean product image using Gemini 2.5 Flash Image
-      const generatedImageData = await generateCleanProductImage(
-        garmentDescription,
-        originalImageUrl,
-        progressCallback
-      )
+      // Crop the image to focus on this specific garment if bounding box is available
+      let croppedImageData = originalImageUrl
+
+      if (garment.boundingBox) {
+        try {
+          console.log(`🎯 Cropping garment ${i + 1}: ${garment.name}`)
+          console.log(`📦 Bounding box:`, garment.boundingBox)
+          croppedImageData = await cropImageByBoundingBox(originalImageUrl, garment.boundingBox)
+          console.log(`✅ Using cropped image for unbiased extraction`)
+        } catch (cropError) {
+          console.warn(`⚠️ Failed to crop image for garment ${i + 1}, using original:`, cropError)
+          // Fall back to original image
+          croppedImageData = originalImageUrl
+        }
+      } else {
+        console.log(`ℹ️ No bounding box for garment ${i + 1}, using full image`)
+      }
+
+      // Generate clean product image using Gemini 2.5 Flash Image with retry logic
+      // Input is ONLY the cropped image - no metadata to avoid bias
+      let generatedImageData = croppedImageData
+      let attempts = 0
+      const maxAttempts = 2
+
+      while (attempts < maxAttempts) {
+        try {
+          generatedImageData = await generateCleanProductImage(
+            croppedImageData,
+            progressCallback
+          )
+          break // Success!
+        } catch (error) {
+          attempts++
+          console.warn(`🔄 Image generation attempt ${attempts} failed for garment ${i + 1}:`, error)
+          if (attempts >= maxAttempts) {
+            console.error('❌ All generation attempts failed, using cropped image')
+            progressCallback?.(`⚠️ Using cropped image for item ${i + 1}`, progressPercent)
+          } else {
+            console.log(`🔄 Retrying... (attempt ${attempts + 1}/${maxAttempts})`)
+            // Brief delay before retry
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          }
+        }
+      }
 
       items.push({
         name: garment.name || `Clothing Item ${i + 1}`,
@@ -330,8 +657,8 @@ export async function analyzeClothingWithGemini(
     const model = ai.getGenerativeModel({
       model: 'gemini-2.0-flash-latest',
       generationConfig: {
-        temperature: 0.4, // Lower temperature for more consistent results
-        topK: 32,
+        temperature: 0, // Zero temperature for deterministic metadata extraction
+        topK: 1,
         topP: 1,
         maxOutputTokens: 1024,
       },

@@ -24,11 +24,13 @@ import { Route as TrendsTrendIdRouteImport } from './routes/trends/$trendId'
 import { Route as SettingsPrivacyRouteImport } from './routes/settings/privacy'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
 import { Route as SettingsDataRouteImport } from './routes/settings/data'
+import { Route as SettingsAiRouteImport } from './routes/settings/ai'
 import { Route as SettingsAboutRouteImport } from './routes/settings/about'
 import { Route as ProfilesNewRouteImport } from './routes/profiles/new'
 import { Route as OutfitsNewRouteImport } from './routes/outfits/new'
 import { Route as OutfitsOutfitIdRouteImport } from './routes/outfits/$outfitId'
 import { Route as ItemsNewRouteImport } from './routes/items/new'
+import { Route as ItemsAiAnalyzeRouteImport } from './routes/items/ai-analyze'
 import { Route as ItemsItemIdRouteImport } from './routes/items/$itemId'
 import { Route as GuidesGuideIdRouteImport } from './routes/guides/$guideId'
 import { Route as ArticlesArticleIdRouteImport } from './routes/articles/$articleId'
@@ -109,6 +111,11 @@ const SettingsDataRoute = SettingsDataRouteImport.update({
   path: '/data',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsAiRoute = SettingsAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsAboutRoute = SettingsAboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -132,6 +139,11 @@ const OutfitsOutfitIdRoute = OutfitsOutfitIdRouteImport.update({
 const ItemsNewRoute = ItemsNewRouteImport.update({
   id: '/items/new',
   path: '/items/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ItemsAiAnalyzeRoute = ItemsAiAnalyzeRouteImport.update({
+  id: '/items/ai-analyze',
+  path: '/items/ai-analyze',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ItemsItemIdRoute = ItemsItemIdRouteImport.update({
@@ -167,11 +179,13 @@ export interface FileRoutesByFullPath {
   '/articles/$articleId': typeof ArticlesArticleIdRoute
   '/guides/$guideId': typeof GuidesGuideIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
+  '/items/ai-analyze': typeof ItemsAiAnalyzeRoute
   '/items/new': typeof ItemsNewRoute
   '/outfits/$outfitId': typeof OutfitsOutfitIdRoute
   '/outfits/new': typeof OutfitsNewRoute
   '/profiles/new': typeof ProfilesNewRoute
   '/settings/about': typeof SettingsAboutRoute
+  '/settings/ai': typeof SettingsAiRoute
   '/settings/data': typeof SettingsDataRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
@@ -191,11 +205,13 @@ export interface FileRoutesByTo {
   '/articles/$articleId': typeof ArticlesArticleIdRoute
   '/guides/$guideId': typeof GuidesGuideIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
+  '/items/ai-analyze': typeof ItemsAiAnalyzeRoute
   '/items/new': typeof ItemsNewRoute
   '/outfits/$outfitId': typeof OutfitsOutfitIdRoute
   '/outfits/new': typeof OutfitsNewRoute
   '/profiles/new': typeof ProfilesNewRoute
   '/settings/about': typeof SettingsAboutRoute
+  '/settings/ai': typeof SettingsAiRoute
   '/settings/data': typeof SettingsDataRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
@@ -218,11 +234,13 @@ export interface FileRoutesById {
   '/articles/$articleId': typeof ArticlesArticleIdRoute
   '/guides/$guideId': typeof GuidesGuideIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
+  '/items/ai-analyze': typeof ItemsAiAnalyzeRoute
   '/items/new': typeof ItemsNewRoute
   '/outfits/$outfitId': typeof OutfitsOutfitIdRoute
   '/outfits/new': typeof OutfitsNewRoute
   '/profiles/new': typeof ProfilesNewRoute
   '/settings/about': typeof SettingsAboutRoute
+  '/settings/ai': typeof SettingsAiRoute
   '/settings/data': typeof SettingsDataRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
@@ -246,11 +264,13 @@ export interface FileRouteTypes {
     | '/articles/$articleId'
     | '/guides/$guideId'
     | '/items/$itemId'
+    | '/items/ai-analyze'
     | '/items/new'
     | '/outfits/$outfitId'
     | '/outfits/new'
     | '/profiles/new'
     | '/settings/about'
+    | '/settings/ai'
     | '/settings/data'
     | '/settings/notifications'
     | '/settings/privacy'
@@ -270,11 +290,13 @@ export interface FileRouteTypes {
     | '/articles/$articleId'
     | '/guides/$guideId'
     | '/items/$itemId'
+    | '/items/ai-analyze'
     | '/items/new'
     | '/outfits/$outfitId'
     | '/outfits/new'
     | '/profiles/new'
     | '/settings/about'
+    | '/settings/ai'
     | '/settings/data'
     | '/settings/notifications'
     | '/settings/privacy'
@@ -296,11 +318,13 @@ export interface FileRouteTypes {
     | '/articles/$articleId'
     | '/guides/$guideId'
     | '/items/$itemId'
+    | '/items/ai-analyze'
     | '/items/new'
     | '/outfits/$outfitId'
     | '/outfits/new'
     | '/profiles/new'
     | '/settings/about'
+    | '/settings/ai'
     | '/settings/data'
     | '/settings/notifications'
     | '/settings/privacy'
@@ -323,6 +347,7 @@ export interface RootRouteChildren {
   ArticlesArticleIdRoute: typeof ArticlesArticleIdRoute
   GuidesGuideIdRoute: typeof GuidesGuideIdRoute
   ItemsItemIdRoute: typeof ItemsItemIdRoute
+  ItemsAiAnalyzeRoute: typeof ItemsAiAnalyzeRoute
   ItemsNewRoute: typeof ItemsNewRoute
   ProfilesNewRoute: typeof ProfilesNewRoute
   TrendsTrendIdRoute: typeof TrendsTrendIdRoute
@@ -436,6 +461,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsDataRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/ai': {
+      id: '/settings/ai'
+      path: '/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof SettingsAiRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/about': {
       id: '/settings/about'
       path: '/about'
@@ -469,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/items/new'
       fullPath: '/items/new'
       preLoaderRoute: typeof ItemsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/items/ai-analyze': {
+      id: '/items/ai-analyze'
+      path: '/items/ai-analyze'
+      fullPath: '/items/ai-analyze'
+      preLoaderRoute: typeof ItemsAiAnalyzeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/items/$itemId': {
@@ -521,6 +560,7 @@ const OutfitsRouteWithChildren =
 
 interface SettingsRouteChildren {
   SettingsAboutRoute: typeof SettingsAboutRoute
+  SettingsAiRoute: typeof SettingsAiRoute
   SettingsDataRoute: typeof SettingsDataRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   SettingsPrivacyRoute: typeof SettingsPrivacyRoute
@@ -529,6 +569,7 @@ interface SettingsRouteChildren {
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsAboutRoute: SettingsAboutRoute,
+  SettingsAiRoute: SettingsAiRoute,
   SettingsDataRoute: SettingsDataRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
   SettingsPrivacyRoute: SettingsPrivacyRoute,
@@ -551,6 +592,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArticlesArticleIdRoute: ArticlesArticleIdRoute,
   GuidesGuideIdRoute: GuidesGuideIdRoute,
   ItemsItemIdRoute: ItemsItemIdRoute,
+  ItemsAiAnalyzeRoute: ItemsAiAnalyzeRoute,
   ItemsNewRoute: ItemsNewRoute,
   ProfilesNewRoute: ProfilesNewRoute,
   TrendsTrendIdRoute: TrendsTrendIdRoute,

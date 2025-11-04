@@ -16,6 +16,17 @@ const config = defineConfig({
     tanstackStart(),
     viteReact(),
   ],
+  ssr: {
+    // Exclude heavy AI libraries from SSR bundle (client-only)
+    noExternal: [],
+    external: [
+      '@tensorflow/tfjs',
+      '@tensorflow-models/coco-ssd',
+      '@mlc-ai/web-llm',
+      '@google/generative-ai',
+      'colorthief',
+    ],
+  },
 })
 
 export default config

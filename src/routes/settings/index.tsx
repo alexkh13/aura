@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Bell, Lock, Palette, Database, Info, RotateCcw, Check, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Bell, Lock, Palette, Database, Info, RotateCcw, Check, X, Sparkles } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
 import { useProfile } from '@/hooks/useProfile'
 import { useResetProfile } from '@/hooks/useData'
@@ -32,6 +32,7 @@ function SettingsPage() {
     {
       title: 'Preferences',
       items: [
+        { icon: Sparkles, label: 'AI Settings', description: 'Configure TryOff AI and tokens', route: '/settings/ai' },
         { icon: Bell, label: 'Notifications', description: 'Manage notification settings', route: '/settings/notifications' },
       ],
     },
