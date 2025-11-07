@@ -1020,3 +1020,219 @@ function fileToBase64(file: File): Promise<string> {
 function fileToDataURL(file: File): Promise<string> {
   return fileToBase64(file)
 }
+
+/**
+ * Helper: Create a composite image from multiple clothing items
+ * This helps the AI understand all items as a single outfit
+ */
+async function createClothingComposite(itemDataUrls: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      if (itemDataUrls.length === 1) {
+        resolve(itemDataUrls[0])
+        return
+      }
+
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'))
+        return
+      }
+
+      // Load all images first
+      const imagePromises = itemDataUrls.map(dataUrl => {
+        return new Promise<HTMLImageElement>((res, rej) => {
+          const img = new Image()
+          img.onload = () => res(img)
+          img.onerror = rej
+          img.src = dataUrl
+        })
+      })
+
+      Promise.all(imagePromises).then(images => {
+        // Calculate grid layout
+        const cols = Math.min(2, images.length)
+        const rows = Math.ceil(images.length / cols)
+        const itemSize = 512 // Standard size for each item
+
+        canvas.width = itemSize * cols
+        canvas.height = itemSize * rows
+
+        // Fill with white background
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+        // Draw each image in grid
+        images.forEach((img, index) => {
+          const col = index % cols
+          const row = Math.floor(index / cols)
+          const x = col * itemSize
+          const y = row * itemSize
+
+          // Calculate scaling to fit in square
+          const scale = Math.min(itemSize / img.width, itemSize / img.height)
+          const scaledWidth = img.width * scale
+          const scaledHeight = img.height * scale
+          const offsetX = x + (itemSize - scaledWidth) / 2
+          const offsetY = y + (itemSize - scaledHeight) / 2
+
+          ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight)
+        })
+
+        const compositeDataUrl = canvas.toDataURL('image/jpeg', 0.95)
+        console.log(`✅ Created composite image with ${images.length} items`)
+        resolve(compositeDataUrl)
+      }).catch(reject)
+    } catch (error) {
+      reject(error)
+    }
+  })
+}
+
+/**
+ * Virtual try-on: Show how outfit items would look on a user
+ * Takes user's photo and outfit items with metadata, generates composite result
+ */
+export async function generateVirtualTryOn(
+  userPhotoDataUrl: string,
+  outfitItems: Array<{ name: string; category: string; color?: string; brand?: string; tags?: string; photo: string }>,
+  progressCallback?: (message: string, progress: number) => void
+): Promise<string> {
+  try {
+    progressCallback?.('Initializing virtual try-on...', 10)
+
+    const ai = initializeGemini()
+    const model = ai.getGenerativeModel({
+      model: 'gemini-2.5-flash-image',
+    })
+
+    progressCallback?.('Preparing outfit items...', 20)
+
+    // Extract photo URLs
+    const outfitItemsDataUrls = outfitItems.map(item => item.photo)
+
+    // Create a composite image if multiple items - this helps the AI understand the complete outfit
+    let clothingImage: string
+    if (outfitItemsDataUrls.length > 1) {
+      console.log(`🔄 Creating composite from ${outfitItemsDataUrls.length} items...`)
+      clothingImage = await createClothingComposite(outfitItemsDataUrls)
+    } else {
+      clothingImage = outfitItemsDataUrls[0]
+    }
+
+    progressCallback?.('Analyzing photos...', 40)
+
+    // Build detailed item descriptions from metadata
+    const itemDescriptions = outfitItems.map((item, index) => {
+      const parts = [
+        `${index + 1}. ${item.category}: "${item.name}"`
+      ]
+      if (item.color) parts.push(`Color: ${item.color}`)
+      if (item.brand) parts.push(`Brand: ${item.brand}`)
+      if (item.tags) parts.push(`Style/Details: ${item.tags}`)
+      return parts.join(' | ')
+    }).join('\n')
+
+    console.log('👔 Outfit items:', itemDescriptions)
+
+    // Build a more explicit prompt that emphasizes replacing ALL clothing with detailed metadata
+    const prompt = `You are performing a complete clothing replacement. Replace ALL of the person's clothing in the first photo with the outfit items shown in the second photo.
+
+OUTFIT DETAILS - Pay close attention to these specific items:
+${itemDescriptions}
+
+CRITICAL - Replace ALL clothing with the items described above:
+- Top/shirt/blouse/jacket (completely replace all upper body clothing)
+- Bottom/pants/skirt/shorts (completely replace all lower body clothing)
+- Shoes/footwear (if visible in outfit items)
+- Any accessories shown (hats, scarves, bags, etc.)
+
+Requirements:
+- Replace EVERY piece of visible clothing - do not keep ANY original clothing
+- Use the exact colors specified in the outfit details above
+- Match the style and category of each item (e.g., if it says "casual t-shirt", make it look casual)
+- The person's face, hair, skin, body shape, and pose must stay EXACTLY the same
+- Maintain the original photo's background, lighting, and shadows
+- Make the new clothes fit naturally on their body with realistic fabric draping and wrinkles
+- Match all colors, patterns, textures, and brand aesthetics from the outfit items exactly
+- Pay special attention to small details like buttons, zippers, logos, prints
+- The final image must look photorealistic as if the person is actually wearing these clothes
+
+Generate the image now with all clothing completely replaced according to the outfit details above.`
+
+    progressCallback?.('Generating virtual try-on...', 60)
+
+    // Prepare the request with user photo and clothing composite
+    const parts: any[] = [
+      {
+        inlineData: {
+          data: userPhotoDataUrl.split(',')[1],
+          mimeType: 'image/jpeg',
+        },
+      },
+      {
+        inlineData: {
+          data: clothingImage.split(',')[1],
+          mimeType: 'image/jpeg',
+        },
+      },
+    ]
+
+    // Add text prompt
+    parts.push({
+      text: prompt,
+    })
+
+    const generationRequest = {
+      contents: [
+        {
+          role: 'user',
+          parts,
+        },
+      ],
+      generationConfig: {
+        temperature: 0.3, // Lower temperature for more consistent clothing replacement
+        topK: 40,
+        topP: 0.95,
+        responseModalities: ['Image'],
+      },
+    }
+
+    console.log(`📤 Sending virtual try-on request (${outfitItems.length} items → 1 composite)...`)
+    console.log('📝 Prompt preview:', prompt.substring(0, 200) + '...')
+    console.log('📝 Full prompt length:', prompt.length, 'characters')
+
+    const result = await model.generateContent(generationRequest)
+    const response = await result.response
+
+    progressCallback?.('Processing result...', 85)
+
+    // Extract generated image from response
+    const responseParts = response.candidates?.[0]?.content?.parts || []
+    console.log('🔍 Response parts:', responseParts.length, 'part(s)')
+
+    for (const part of responseParts) {
+      if (part.inlineData) {
+        console.log('✅ Virtual try-on image generated!')
+        const generatedImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
+
+        progressCallback?.('Virtual try-on complete!', 100)
+        return generatedImage
+      }
+    }
+
+    throw new Error('No image generated in response')
+  } catch (error) {
+    console.error('❌ Virtual try-on failed:', error)
+
+    if (error instanceof Error) {
+      if (error.message.includes('API key')) {
+        throw new Error('Please add your Google AI API key in Settings → AI Settings.')
+      }
+      throw error
+    }
+
+    throw new Error('Virtual try-on failed. Please try again.')
+  }
+}

@@ -65,6 +65,25 @@ export async function generateOutfitDetails(
   }
 }
 
+/**
+ * Generate virtual try-on visualization
+ * Shows how outfit items would look on a user
+ */
+export async function generateVirtualTryOnVisualization(
+  userPhotoDataUrl: string,
+  outfitItems: Array<{ name: string; category: string; color?: string; brand?: string; tags?: string; photo: string }>,
+  progressCallback?: (message: string, progress: number) => void
+): Promise<string> {
+  try {
+    const { generateVirtualTryOn } = await import('./gemini')
+    const result = await generateVirtualTryOn(userPhotoDataUrl, outfitItems, progressCallback)
+    return result
+  } catch (error) {
+    console.error('Virtual try-on failed:', error)
+    throw error
+  }
+}
+
 // Re-export types
 export type {
   AIGeneratedItem,

@@ -84,7 +84,7 @@ const itemSchema = {
 } as const
 
 const outfitSchema = {
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -111,6 +111,12 @@ const outfitSchema = {
       type: 'string'
     },
     itemIds: {
+      type: 'array',
+      items: {
+        type: 'string'
+      }
+    },
+    virtualTryOnImages: {
       type: 'array',
       items: {
         type: 'string'
@@ -194,9 +200,11 @@ export async function initDatabase(): Promise<AuraDatabase> {
       const { createRxDatabase, addRxPlugin } = await import('rxdb')
       const { getRxStorageDexie } = await import('rxdb/plugins/storage-dexie')
       const { RxDBMigrationSchemaPlugin } = await import('rxdb/plugins/migration-schema')
+      const { RxDBUpdatePlugin } = await import('rxdb/plugins/update')
 
-      // Add migration plugin
+      // Add required plugins
       addRxPlugin(RxDBMigrationSchemaPlugin)
+      addRxPlugin(RxDBUpdatePlugin)
 
       // Add dev-mode plugin in development
       if (import.meta.env.DEV) {
@@ -280,6 +288,13 @@ export async function initDatabase(): Promise<AuraDatabase> {
               return {
                 ...oldDoc,
                 profileId: defaultProfileId
+              }
+            },
+            2: (oldDoc: any) => {
+              // Migration from version 1 to 2: add virtualTryOnImages field
+              return {
+                ...oldDoc,
+                virtualTryOnImages: []
               }
             }
           }

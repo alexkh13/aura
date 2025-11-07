@@ -44,6 +44,7 @@ export interface Outfit {
   tags?: string
   notes?: string
   itemIds: string[] // References to Item IDs
+  virtualTryOnImages?: string[] // Base64 encoded virtual try-on images
   profileId: string // Reference to Profile ID
   createdAt: number
   updatedAt: number
