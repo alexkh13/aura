@@ -39,6 +39,8 @@ interface ItemFormData {
   isProcessing?: boolean
   processingMessage?: string
   needsAIGeneration?: boolean // Flag to show "Generate AI Image" button
+  confidence?: number // AI detection confidence score (0.0-1.0)
+  boundingBoxAdjusted?: boolean // Whether bounding box was auto-adjusted
 }
 
 function AIAnalyzePage() {
@@ -52,13 +54,41 @@ function AIAnalyzePage() {
   const [hasGeminiKey, setHasGeminiKey] = useState(false)
   const [showGeneratedImage, setShowGeneratedImage] = useState(true) // Toggle between cropped and generated
 
+  // Bounding box editing
+  const [editingBoundingBox, setEditingBoundingBox] = useState(false)
+  const [editedBoundingBox, setEditedBoundingBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [dragMode, setDragMode] = useState<'none' | 'corner' | 'edge' | 'sketch' | 'pinch'>('none')
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; bbox: any; corner?: string; edge?: string } | null>(null)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const processingRef = useRef(false)
+  const imageRef = useRef<HTMLImageElement>(null)
+  const touchStartRef = useRef<{ touches: Touch[]; bbox: any } | null>(null)
 
   // Check if Gemini is configured
   useEffect(() => {
     isGeminiConfigured().then(setHasGeminiKey)
   }, [])
+
+  // Prevent browser zoom and scroll when actively manipulating
+  useEffect(() => {
+    if (!editingBoundingBox) return
+
+    const preventScrollAndZoom = (e: TouchEvent) => {
+      // Prevent scroll/zoom when actively manipulating (not in 'none' mode)
+      if (dragMode !== 'none') {
+        e.preventDefault()
+      }
+    }
+
+    // Add listener with passive: false to allow preventDefault
+    document.addEventListener('touchmove', preventScrollAndZoom, { passive: false })
+
+    return () => {
+      document.removeEventListener('touchmove', preventScrollAndZoom)
+    }
+  }, [editingBoundingBox, dragMode])
 
   // Crop image helper
   const cropImage = async (imageDataUrl: string, boundingBox: any): Promise<string> => {
@@ -160,35 +190,14 @@ function AIAnalyzePage() {
 
         for (const metadata of extractedMetadata) {
           let croppedImage = images[i]
+
           if (metadata.metadata?.boundingBox) {
             try {
               const bbox = metadata.metadata.boundingBox
               console.log(`✂️ Cropping "${metadata.name}" (${metadata.category})`)
-              console.log(`   Bounding box (pixels): x=${bbox.x}px, y=${bbox.y}px, w=${bbox.width}px, h=${bbox.height}px`)
+              console.log(`   Bounding box: x=${bbox.x}px, y=${bbox.y}px, w=${bbox.width}px, h=${bbox.height}px`)
 
-              // Validate bounding boxes
-              const aspectRatio = bbox.width / bbox.height
-
-              if (metadata.category === 'Shoes') {
-                console.log(`👟 Shoe pair detected`)
-                console.log(`   Aspect ratio: ${aspectRatio.toFixed(2)} (should be ~1.5-2.5 for side-by-side shoes)`)
-
-                if (aspectRatio < 1.2) {
-                  console.error(`❌ PROBLEM: Shoe bounding box too narrow! This will cut off shoes.`)
-                  console.error(`   Expected: width > height for shoes side-by-side`)
-                  console.error(`   Got: width/height = ${aspectRatio.toFixed(2)}`)
-                } else if (aspectRatio > 3.0) {
-                  console.warn(`⚠️ Shoe bounding box very wide (${aspectRatio.toFixed(2)}). May include extra space.`)
-                } else {
-                  console.log(`✅ Good shoe bounding box`)
-                }
-              } else {
-                console.log(`   Aspect ratio: ${aspectRatio.toFixed(2)} (${aspectRatio > 1 ? 'wide' : 'tall'})`)
-              }
-
-              console.log(`   Box size: ${bbox.width}x${bbox.height}px`)
-
-              croppedImage = await cropImage(images[i], metadata.metadata.boundingBox)
+              croppedImage = await cropImage(images[i], bbox)
               console.log(`✅ Cropped successfully`)
             } catch (err) {
               console.warn('Failed to crop image, using original:', err)
@@ -196,6 +205,10 @@ function AIAnalyzePage() {
           } else {
             console.warn(`⚠️ No bounding box for: ${metadata.name}`)
           }
+
+          // Log confidence score
+          const confidence = metadata.confidence || 0.9
+          console.log(`   Confidence: ${(confidence * 100).toFixed(0)}%`)
 
           newItemsForThisImage.push({
             name: metadata.name,
@@ -216,6 +229,8 @@ function AIAnalyzePage() {
             isProcessing: false,
             processingMessage: '',
             needsAIGeneration: true, // Show AI generation button
+            confidence: confidence,
+            boundingBoxAdjusted: false,
           })
         }
 
@@ -259,6 +274,7 @@ function AIAnalyzePage() {
     try {
       const { generateCleanProductImageFromData } = await import('@/services/ai/gemini')
 
+      const item = analyzedItems[position]
       console.log(`🎨 Starting image generation for item ${position + 1}: ${itemName}`)
 
       // Update status
@@ -275,17 +291,30 @@ function AIAnalyzePage() {
         return newItems
       })
 
-      const generatedImage = await generateCleanProductImageFromData(croppedImageData, (message, progress) => {
-        setAnalyzedItems(prevItems => {
-          if (position >= prevItems.length) return prevItems
-          const newItems = [...prevItems]
-          newItems[position] = {
-            ...newItems[position],
-            processingMessage: message,
-          }
-          return newItems
-        })
-      })
+      // Pass metadata to help AI understand what to generate
+      const itemMetadata = {
+        name: item.name,
+        category: item.category,
+        color: item.color,
+        material: item.metadata?.material,
+        pattern: item.metadata?.pattern,
+      }
+
+      const generatedImage = await generateCleanProductImageFromData(
+        croppedImageData,
+        (message, progress) => {
+          setAnalyzedItems(prevItems => {
+            if (position >= prevItems.length) return prevItems
+            const newItems = [...prevItems]
+            newItems[position] = {
+              ...newItems[position],
+              processingMessage: message,
+            }
+            return newItems
+          })
+        },
+        itemMetadata
+      )
 
       console.log(`✅ Image generated for item ${position + 1}: ${itemName}`)
 
@@ -623,6 +652,388 @@ function AIAnalyzePage() {
     setShowGeneratedImage(newShowGenerated)
   }
 
+  // Bounding box editing functions
+  const handleStartEditBoundingBox = () => {
+    const currentItem = analyzedItems[currentItemIndex]
+    if (!currentItem.originalImageData || !currentItem.metadata?.boundingBox) return
+
+    // Load original image to get dimensions
+    const img = new Image()
+    img.onload = () => {
+      setImageDimensions({ width: img.width, height: img.height })
+      setEditedBoundingBox({ ...currentItem.metadata.boundingBox })
+      setEditingBoundingBox(true)
+    }
+    img.src = currentItem.originalImageData
+  }
+
+  const handleCancelEditBoundingBox = () => {
+    setEditingBoundingBox(false)
+    setEditedBoundingBox(null)
+    setImageDimensions(null)
+  }
+
+  const handleSaveBoundingBox = async () => {
+    if (!editedBoundingBox) return
+    const currentItem = analyzedItems[currentItemIndex]
+    if (!currentItem.originalImageData) return
+
+    try {
+      console.log('💾 Saving new bounding box:', editedBoundingBox)
+
+      // Recrop with new bounding box
+      const newCroppedImage = await cropImage(currentItem.originalImageData, editedBoundingBox)
+
+      // Update item with new bounding box and cropped image
+      setAnalyzedItems(prevItems => {
+        const newItems = [...prevItems]
+        newItems[currentItemIndex] = {
+          ...newItems[currentItemIndex],
+          metadata: {
+            ...newItems[currentItemIndex].metadata,
+            boundingBox: editedBoundingBox,
+          },
+          croppedImageData: newCroppedImage,
+          imageData: newCroppedImage,
+          generatedImageData: undefined, // Clear generated image as crop changed
+          needsAIGeneration: true,
+        }
+        return newItems
+      })
+
+      setEditingBoundingBox(false)
+      setEditedBoundingBox(null)
+      setImageDimensions(null)
+      console.log('✅ Bounding box updated successfully')
+    } catch (error) {
+      console.error('Failed to update bounding box:', error)
+    }
+  }
+
+  // Helper function to convert touch coordinates to image coordinates
+  const touchToImageCoords = (touch: Touch): { x: number; y: number } | null => {
+    if (!imageRef.current || !imageDimensions) return null
+
+    const container = imageRef.current.parentElement
+    if (!container) return null
+
+    const containerRect = container.getBoundingClientRect()
+    const imageAspect = imageDimensions.width / imageDimensions.height
+    const containerAspect = containerRect.width / containerRect.height
+
+    let renderedWidth: number, renderedHeight: number, offsetX: number, offsetY: number
+
+    if (imageAspect > containerAspect) {
+      renderedWidth = containerRect.width
+      renderedHeight = containerRect.width / imageAspect
+      offsetX = 0
+      offsetY = (containerRect.height - renderedHeight) / 2
+    } else {
+      renderedHeight = containerRect.height
+      renderedWidth = containerRect.height * imageAspect
+      offsetX = (containerRect.width - renderedWidth) / 2
+      offsetY = 0
+    }
+
+    const touchX = touch.clientX - containerRect.left - offsetX
+    const touchY = touch.clientY - containerRect.top - offsetY
+
+    // Convert to image coordinates
+    const scaleX = imageDimensions.width / renderedWidth
+    const scaleY = imageDimensions.height / renderedHeight
+
+    return {
+      x: touchX * scaleX,
+      y: touchY * scaleY,
+    }
+  }
+
+  // Helper function to detect which part of bbox is touched
+  const detectTouchTarget = (touchX: number, touchY: number, bbox: any): { type: 'corner' | 'edge' | 'inside' | 'outside'; detail?: string } => {
+    const hitRadius = 30 // pixels in image space for touch targets
+
+    // Check corners
+    const corners = {
+      'top-left': { x: bbox.x, y: bbox.y },
+      'top-right': { x: bbox.x + bbox.width, y: bbox.y },
+      'bottom-left': { x: bbox.x, y: bbox.y + bbox.height },
+      'bottom-right': { x: bbox.x + bbox.width, y: bbox.y + bbox.height },
+    }
+
+    for (const [name, corner] of Object.entries(corners)) {
+      const dist = Math.sqrt(Math.pow(touchX - corner.x, 2) + Math.pow(touchY - corner.y, 2))
+      if (dist < hitRadius) {
+        return { type: 'corner', detail: name }
+      }
+    }
+
+    // Check edges
+    if (Math.abs(touchX - bbox.x) < hitRadius && touchY >= bbox.y && touchY <= bbox.y + bbox.height) {
+      return { type: 'edge', detail: 'left' }
+    }
+    if (Math.abs(touchX - (bbox.x + bbox.width)) < hitRadius && touchY >= bbox.y && touchY <= bbox.y + bbox.height) {
+      return { type: 'edge', detail: 'right' }
+    }
+    if (Math.abs(touchY - bbox.y) < hitRadius && touchX >= bbox.x && touchX <= bbox.x + bbox.width) {
+      return { type: 'edge', detail: 'top' }
+    }
+    if (Math.abs(touchY - (bbox.y + bbox.height)) < hitRadius && touchX >= bbox.x && touchX <= bbox.x + bbox.width) {
+      return { type: 'edge', detail: 'bottom' }
+    }
+
+    // Check inside
+    if (touchX >= bbox.x && touchX <= bbox.x + bbox.width && touchY >= bbox.y && touchY <= bbox.y + bbox.height) {
+      return { type: 'inside' }
+    }
+
+    return { type: 'outside' }
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!editingBoundingBox || !editedBoundingBox || !imageDimensions) return
+
+    // Multi-touch - pinch/pan mode
+    if (e.touches.length >= 2) {
+      e.preventDefault()
+      setDragMode('pinch')
+      touchStartRef.current = {
+        touches: Array.from(e.touches),
+        bbox: { ...editedBoundingBox },
+      }
+      return
+    }
+
+    // Single touch
+    const coords = touchToImageCoords(e.touches[0])
+    if (!coords) return
+
+    const target = detectTouchTarget(coords.x, coords.y, editedBoundingBox)
+
+    if (target.type === 'corner') {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragMode('corner')
+      setDragStart({ x: coords.x, y: coords.y, bbox: { ...editedBoundingBox }, corner: target.detail })
+    } else if (target.type === 'edge') {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragMode('edge')
+      setDragStart({ x: coords.x, y: coords.y, bbox: { ...editedBoundingBox }, edge: target.detail })
+    } else if (target.type === 'inside') {
+      // Prevent scrolling when touching inside the box
+      e.preventDefault()
+      e.stopPropagation()
+      // Don't set any drag mode - just prevent scroll
+    } else if (target.type === 'outside') {
+      // Don't prevent default yet - wait to see if it's scroll or sketch
+      // Store initial position for intent detection
+      setDragStart({ x: coords.x, y: coords.y, bbox: { ...editedBoundingBox } })
+      // Don't set mode yet - will be determined in touchmove
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!editingBoundingBox || !imageDimensions) return
+
+    // Intent detection for single touch when dragMode is not set yet
+    if (dragMode === 'none' && dragStart && e.touches.length === 1) {
+      const coords = touchToImageCoords(e.touches[0])
+      if (!coords) return
+
+      const deltaX = Math.abs(coords.x - dragStart.x)
+      const deltaY = Math.abs(coords.y - dragStart.y)
+      const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+      // Wait for minimum movement before deciding intent
+      const INTENT_THRESHOLD = 20 // pixels in image space
+
+      if (totalMovement > INTENT_THRESHOLD) {
+        // Calculate movement ratio
+        const verticalRatio = deltaY / (deltaX + 1) // +1 to avoid divide by zero
+
+        // If mostly vertical movement (ratio > 2), it's likely scroll
+        if (verticalRatio > 2) {
+          // User wants to scroll - clear drag state and allow scroll
+          setDragStart(null)
+          return // Don't prevent default, allow scroll
+        } else {
+          // User wants to sketch - enter sketch mode
+          e.preventDefault()
+          setDragMode('sketch')
+          setEditedBoundingBox({ x: dragStart.x, y: dragStart.y, width: 0, height: 0 })
+        }
+      } else {
+        // Haven't moved enough to determine intent yet
+        return // Don't prevent default yet
+      }
+    }
+
+    // Once mode is determined, prevent default for all active modes
+    if (dragMode !== 'none') {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    // Handle pinch mode (2 fingers)
+    if (dragMode === 'pinch' && touchStartRef.current && e.touches.length >= 2) {
+      const touches = Array.from(e.touches)
+      const startTouches = touchStartRef.current.touches
+      const startBbox = touchStartRef.current.bbox
+
+      if (startTouches.length < 2) return
+
+      const container = imageRef.current?.parentElement
+      const imgElement = imageRef.current
+      if (!container || !imgElement) return
+
+      const containerRect = container.getBoundingClientRect()
+      const imageAspect = imageDimensions.width / imageDimensions.height
+      const containerAspect = containerRect.width / containerRect.height
+
+      let renderedWidth: number, renderedHeight: number, offsetX: number, offsetY: number
+
+      if (imageAspect > containerAspect) {
+        renderedWidth = containerRect.width
+        renderedHeight = containerRect.width / imageAspect
+        offsetX = 0
+        offsetY = (containerRect.height - renderedHeight) / 2
+      } else {
+        renderedHeight = containerRect.height
+        renderedWidth = containerRect.height * imageAspect
+        offsetX = (containerRect.width - renderedWidth) / 2
+        offsetY = 0
+      }
+
+      const scaleX = imageDimensions.width / renderedWidth
+      const scaleY = imageDimensions.height / renderedHeight
+
+      const getDistance = (t1: Touch, t2: Touch) =>
+        Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2))
+
+      const startDistance = getDistance(startTouches[0], startTouches[1])
+      const currentDistance = getDistance(touches[0], touches[1])
+      const scale = currentDistance / startDistance
+
+      const getMidpoint = (t1: Touch, t2: Touch) => ({
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      })
+
+      const startMidpoint = getMidpoint(startTouches[0], startTouches[1])
+      const currentMidpoint = getMidpoint(touches[0], touches[1])
+      const deltaX = (currentMidpoint.x - startMidpoint.x) * scaleX
+      const deltaY = (currentMidpoint.y - startMidpoint.y) * scaleY
+
+      const newWidth = Math.max(50, Math.min(imageDimensions.width, startBbox.width * scale))
+      const newHeight = Math.max(50, Math.min(imageDimensions.height, startBbox.height * scale))
+      const centerX = startBbox.x + startBbox.width / 2
+      const centerY = startBbox.y + startBbox.height / 2
+
+      let newX = centerX - newWidth / 2 + deltaX
+      let newY = centerY - newHeight / 2 + deltaY
+
+      newX = Math.max(0, Math.min(imageDimensions.width - newWidth, newX))
+      newY = Math.max(0, Math.min(imageDimensions.height - newHeight, newY))
+
+      setEditedBoundingBox({
+        x: Math.round(newX),
+        y: Math.round(newY),
+        width: Math.round(newWidth),
+        height: Math.round(newHeight),
+      })
+      return
+    }
+
+    // Handle single-finger modes
+    if (!dragStart || !editedBoundingBox || e.touches.length !== 1) return
+
+    const coords = touchToImageCoords(e.touches[0])
+    if (!coords) return
+
+    const deltaX = coords.x - dragStart.x
+    const deltaY = coords.y - dragStart.y
+
+    // Handle sketch mode - diagonal drag to create new box
+    if (dragMode === 'sketch') {
+      const x1 = Math.min(dragStart.x, coords.x)
+      const y1 = Math.min(dragStart.y, coords.y)
+      const x2 = Math.max(dragStart.x, coords.x)
+      const y2 = Math.max(dragStart.y, coords.y)
+
+      setEditedBoundingBox({
+        x: Math.max(0, x1),
+        y: Math.max(0, y1),
+        width: Math.min(imageDimensions.width - x1, x2 - x1),
+        height: Math.min(imageDimensions.height - y1, y2 - y1),
+      })
+      return
+    }
+
+    // Handle corner dragging
+    if (dragMode === 'corner') {
+      const startBbox = dragStart.bbox
+      let newBbox = { ...startBbox }
+
+      switch (dragStart.corner) {
+        case 'top-left':
+          newBbox.x = Math.max(0, Math.min(startBbox.x + startBbox.width - 50, startBbox.x + deltaX))
+          newBbox.y = Math.max(0, Math.min(startBbox.y + startBbox.height - 50, startBbox.y + deltaY))
+          newBbox.width = startBbox.width + startBbox.x - newBbox.x
+          newBbox.height = startBbox.height + startBbox.y - newBbox.y
+          break
+        case 'top-right':
+          newBbox.y = Math.max(0, Math.min(startBbox.y + startBbox.height - 50, startBbox.y + deltaY))
+          newBbox.width = Math.min(imageDimensions.width - startBbox.x, Math.max(50, startBbox.width + deltaX))
+          newBbox.height = startBbox.height + startBbox.y - newBbox.y
+          break
+        case 'bottom-left':
+          newBbox.x = Math.max(0, Math.min(startBbox.x + startBbox.width - 50, startBbox.x + deltaX))
+          newBbox.width = startBbox.width + startBbox.x - newBbox.x
+          newBbox.height = Math.min(imageDimensions.height - startBbox.y, Math.max(50, startBbox.height + deltaY))
+          break
+        case 'bottom-right':
+          newBbox.width = Math.min(imageDimensions.width - startBbox.x, Math.max(50, startBbox.width + deltaX))
+          newBbox.height = Math.min(imageDimensions.height - startBbox.y, Math.max(50, startBbox.height + deltaY))
+          break
+      }
+
+      setEditedBoundingBox(newBbox)
+      return
+    }
+
+    // Handle edge dragging
+    if (dragMode === 'edge') {
+      const startBbox = dragStart.bbox
+      let newBbox = { ...startBbox }
+
+      switch (dragStart.edge) {
+        case 'left':
+          newBbox.x = Math.max(0, Math.min(startBbox.x + startBbox.width - 50, startBbox.x + deltaX))
+          newBbox.width = startBbox.width + startBbox.x - newBbox.x
+          break
+        case 'right':
+          newBbox.width = Math.min(imageDimensions.width - startBbox.x, Math.max(50, startBbox.width + deltaX))
+          break
+        case 'top':
+          newBbox.y = Math.max(0, Math.min(startBbox.y + startBbox.height - 50, startBbox.y + deltaY))
+          newBbox.height = startBbox.height + startBbox.y - newBbox.y
+          break
+        case 'bottom':
+          newBbox.height = Math.min(imageDimensions.height - startBbox.y, Math.max(50, startBbox.height + deltaY))
+          break
+      }
+
+      setEditedBoundingBox(newBbox)
+      return
+    }
+  }
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null
+    setDragMode('none')
+    setDragStart(null)
+  }
+
   // If no items yet, show loading or redirect
   if (analyzedItems.length === 0) {
     return (
@@ -757,6 +1168,24 @@ function AIAnalyzePage() {
                     </div>
                   )}
 
+                  {/* Low Confidence Warning Badge */}
+                  {item.confidence && item.confidence < 0.75 && !item.saved && (
+                    <div className="absolute top-1 left-1">
+                      <div className="bg-yellow-500 rounded px-1 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                        {Math.round(item.confidence * 100)}%
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bounding Box Adjusted Badge */}
+                  {item.boundingBoxAdjusted && !item.saved && (
+                    <div className="absolute bottom-1 left-1">
+                      <div className="bg-blue-500 rounded-full p-0.5">
+                        <RefreshCw className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Current item indicator */}
                   {index === currentItemIndex && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500" />
@@ -769,12 +1198,105 @@ function AIAnalyzePage() {
           {/* Item Photo */}
           <section className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-800">
             {currentItem.imageData && (
-              <div className="relative w-full aspect-square">
+              <div
+                className={`relative w-full ${editingBoundingBox ? 'max-h-[80vh]' : 'aspect-square'}`}
+                style={{
+                  // Allow scroll only when not actively manipulating the box
+                  touchAction: editingBoundingBox
+                    ? (dragMode === 'none' ? 'pan-y' : 'none')
+                    : 'auto'
+                }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
                 <img
-                  src={currentItem.imageData}
+                  ref={imageRef}
+                  src={editingBoundingBox ? currentItem.originalImageData : currentItem.imageData}
                   alt="Item preview"
-                  className="w-full h-full object-cover"
+                  className={`w-full ${editingBoundingBox ? 'object-contain max-h-[80vh]' : 'h-full object-contain'}`}
                 />
+
+                {/* Bounding Box Overlay when editing */}
+                {editingBoundingBox && editedBoundingBox && imageDimensions && (
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
+                    <div className="relative" style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      aspectRatio: `${imageDimensions.width}/${imageDimensions.height}`
+                    }}>
+                      <svg className="w-full h-full" viewBox={`0 0 ${imageDimensions.width} ${imageDimensions.height}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+                        {/* Darken outside bounding box */}
+                        <defs>
+                          <mask id="bbox-mask">
+                            <rect width={imageDimensions.width} height={imageDimensions.height} fill="white" />
+                            <rect
+                              x={editedBoundingBox.x}
+                              y={editedBoundingBox.y}
+                              width={editedBoundingBox.width}
+                              height={editedBoundingBox.height}
+                              fill="black"
+                            />
+                          </mask>
+                        </defs>
+                        <rect width={imageDimensions.width} height={imageDimensions.height} fill="black" opacity="0.6" mask="url(#bbox-mask)" />
+
+                        {/* Bounding box rectangle */}
+                        <rect
+                          x={editedBoundingBox.x}
+                          y={editedBoundingBox.y}
+                          width={editedBoundingBox.width}
+                          height={editedBoundingBox.height}
+                          fill="none"
+                          stroke="#8b5cf6"
+                          strokeWidth="4"
+                          strokeDasharray="10,5"
+                        />
+
+                        {/* Edge midpoint handles (smaller) */}
+                        <circle
+                          cx={editedBoundingBox.x}
+                          cy={editedBoundingBox.y + editedBoundingBox.height / 2}
+                          r="6"
+                          fill="#10b981"
+                          stroke="white"
+                          strokeWidth="2"
+                        />
+                        <circle
+                          cx={editedBoundingBox.x + editedBoundingBox.width}
+                          cy={editedBoundingBox.y + editedBoundingBox.height / 2}
+                          r="6"
+                          fill="#10b981"
+                          stroke="white"
+                          strokeWidth="2"
+                        />
+                        <circle
+                          cx={editedBoundingBox.x + editedBoundingBox.width / 2}
+                          cy={editedBoundingBox.y}
+                          r="6"
+                          fill="#10b981"
+                          stroke="white"
+                          strokeWidth="2"
+                        />
+                        <circle
+                          cx={editedBoundingBox.x + editedBoundingBox.width / 2}
+                          cy={editedBoundingBox.y + editedBoundingBox.height}
+                          r="6"
+                          fill="#10b981"
+                          stroke="white"
+                          strokeWidth="2"
+                        />
+
+                        {/* Corner handles (larger, more prominent) */}
+                        <circle cx={editedBoundingBox.x} cy={editedBoundingBox.y} r="12" fill="#8b5cf6" stroke="white" strokeWidth="3" />
+                        <circle cx={editedBoundingBox.x + editedBoundingBox.width} cy={editedBoundingBox.y} r="12" fill="#8b5cf6" stroke="white" strokeWidth="3" />
+                        <circle cx={editedBoundingBox.x} cy={editedBoundingBox.y + editedBoundingBox.height} r="12" fill="#8b5cf6" stroke="white" strokeWidth="3" />
+                        <circle cx={editedBoundingBox.x + editedBoundingBox.width} cy={editedBoundingBox.y + editedBoundingBox.height} r="12" fill="#8b5cf6" stroke="white" strokeWidth="3" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+
                 {currentItem.isProcessing && (
                   <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3">
                     <Loader2 className="w-10 h-10 animate-spin text-white" />
@@ -783,28 +1305,54 @@ function AIAnalyzePage() {
                     </div>
                   </div>
                 )}
-                {/* AI Generate Button - shown when needsAIGeneration is true */}
-                {currentItem.needsAIGeneration && !currentItem.isProcessing && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                    <button
-                      onClick={handleGenerateAIImage}
-                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl shadow-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105"
-                    >
-                      <Sparkles className="w-5 h-5" />
-                      Generate AI Image
-                    </button>
-                  </div>
+
+                {/* Edit/Save/Cancel Bounding Box Buttons */}
+                {!editingBoundingBox && !currentItem.isProcessing && currentItem.originalImageData && currentItem.metadata?.boundingBox && (
+                  <button
+                    onClick={handleStartEditBoundingBox}
+                    className="absolute bottom-2 left-2 flex items-center gap-2 px-3 py-2 bg-orange-500/90 text-white rounded-lg hover:bg-orange-600 transition-all shadow-lg text-sm"
+                    title="Edit bounding box"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    Edit Box
+                  </button>
                 )}
 
-                {currentItem.aiGenerated && !currentItem.isProcessing && (
-                  <div className="absolute top-2 left-2 px-2 py-1 bg-purple-500/90 text-white text-xs rounded-full flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" />
-                    {currentItem.generatedImageData && !showGeneratedImage ? 'Cropped' : 'AI Generated'}
-                  </div>
+                {editingBoundingBox && (
+                  <>
+                    <button
+                      onClick={handleSaveBoundingBox}
+                      className="absolute bottom-2 left-2 flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all shadow-lg text-sm font-medium"
+                    >
+                      <Check className="w-4 h-4" />
+                      Save
+                    </button>
+                    <button
+                      onClick={handleCancelEditBoundingBox}
+                      className="absolute bottom-2 left-24 flex items-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all shadow-lg text-sm font-medium"
+                    >
+                      <X className="w-4 h-4" />
+                      Cancel
+                    </button>
+                  </>
+                )}
+
+                {/* AI Generate Button - top left position */}
+                {!editingBoundingBox && !currentItem.isProcessing && (currentItem.needsAIGeneration || currentItem.generatedImageData) && (
+                  <button
+                    onClick={handleGenerateAIImage}
+                    className="absolute top-2 left-2 flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-lg shadow-lg hover:from-purple-600 hover:to-pink-600 transition-all text-sm"
+                    title={currentItem.generatedImageData ? "Re-generate AI product image" : "Generate AI product image"}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {currentItem.generatedImageData ? 'Re-generate' : 'Generate AI Image'}
+                  </button>
                 )}
 
                 {/* Re-extract Metadata Button - always on top */}
-                {!currentItem.isProcessing && currentItem.originalImageData && (
+                {!editingBoundingBox && !currentItem.isProcessing && currentItem.originalImageData && (
                   <button
                     onClick={handleReExtractMetadata}
                     className="absolute top-2 right-2 p-2 bg-blue-500/90 text-white rounded-lg hover:bg-blue-600 transition-all shadow-lg"
@@ -815,7 +1363,7 @@ function AIAnalyzePage() {
                 )}
 
                 {/* Toggle Between Cropped and Generated Button */}
-                {currentItem.croppedImageData && currentItem.generatedImageData && !currentItem.isProcessing && (
+                {!editingBoundingBox && currentItem.croppedImageData && currentItem.generatedImageData && !currentItem.isProcessing && (
                   <button
                     onClick={handleToggleImageView}
                     className="absolute bottom-2 right-2 flex items-center gap-2 px-3 py-2 bg-gray-900/90 text-white rounded-lg hover:bg-gray-800 transition-all shadow-lg text-sm"
@@ -832,6 +1380,49 @@ function AIAnalyzePage() {
           {/* Item Details Form */}
           <section className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
             <h2 className="text-lg font-semibold mb-4">Item Details</h2>
+
+            {/* AI Detection Info */}
+            {currentItem.confidence !== undefined && (
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    AI Detection Confidence
+                  </span>
+                  <span className={`text-sm font-bold ${
+                    currentItem.confidence >= 0.85
+                      ? 'text-green-600 dark:text-green-400'
+                      : currentItem.confidence >= 0.75
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-yellow-600 dark:text-yellow-400'
+                  }`}>
+                    {Math.round(currentItem.confidence * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      currentItem.confidence >= 0.85
+                        ? 'bg-green-500'
+                        : currentItem.confidence >= 0.75
+                        ? 'bg-blue-500'
+                        : 'bg-yellow-500'
+                    }`}
+                    style={{ width: `${currentItem.confidence * 100}%` }}
+                  />
+                </div>
+                {currentItem.confidence < 0.75 && (
+                  <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                    ⚠️ Low confidence detection - please review carefully
+                  </p>
+                )}
+                {currentItem.boundingBoxAdjusted && (
+                  <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" />
+                    Bounding box was automatically adjusted for better framing
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>

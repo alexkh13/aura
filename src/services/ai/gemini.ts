@@ -156,18 +156,31 @@ async function cropImageByBoundingBox(
  */
 async function generateCleanProductImage(
   croppedImageData: string,
-  progressCallback?: (message: string, progress: number) => void
+  progressCallback?: (message: string, progress: number) => void,
+  itemMetadata?: {
+    name?: string
+    category?: string
+    color?: string
+    material?: string
+    pattern?: string
+  }
 ): Promise<string> {
   try {
-    console.log('🎨 Starting unbiased image generation from cropped visual input only')
+    console.log('🎨 Starting image generation with metadata:', itemMetadata)
 
     const ai = initializeGemini()
     const model = ai.getGenerativeModel({
       model: 'gemini-2.5-flash-image',
     })
 
-    // Generic prompt - no metadata, purely visual extraction
-    const prompt = `Extract the clothing/footwear item from this image and present it as a clean e-commerce product photo.
+    // Build context-aware prompt with metadata
+    const itemContext = itemMetadata
+      ? `This is a ${itemMetadata.name || 'clothing item'}${itemMetadata.category ? ` (${itemMetadata.category})` : ''}${itemMetadata.color ? ` in ${itemMetadata.color}` : ''}${itemMetadata.material ? ` made of ${itemMetadata.material}` : ''}${itemMetadata.pattern ? ` with ${itemMetadata.pattern} pattern` : ''}.`
+      : 'This is a clothing/footwear item.'
+
+    const prompt = `${itemContext}
+
+Extract this specific item from the image and present it as a clean e-commerce product photo.
 
 Remove any background, people, or context. Display the item centered on pure white background. High-resolution, professional lighting, suitable for online fashion catalog.
 
@@ -300,7 +313,7 @@ export async function extractMultipleGarmentsMetadata(
 
     const ai = initializeGemini()
     const model = ai.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash-exp',
       generationConfig: {
         temperature: 0,
         topK: 1,
@@ -312,51 +325,60 @@ export async function extractMultipleGarmentsMetadata(
     progressCallback?.('Converting image...', 15)
     const imageData = await fileToBase64(imageFile)
 
+    // Get actual image dimensions
+    progressCallback?.('Reading image dimensions...', 20)
+    const imageDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve({ width: img.width, height: img.height })
+      img.onerror = reject
+      img.src = imageData
+    })
+
+    console.log(`📐 Image dimensions: ${imageDimensions.width}x${imageDimensions.height}px`)
+
     progressCallback?.('Analyzing photo for garments...', 30)
 
-    const multiGarmentPrompt = `You are an expert fashion AI and computer vision assistant.
+    const multiGarmentPrompt = `You are an expert fashion AI analyzing clothing items.
 
-Your task is to analyze the provided image and identify ALL distinct garments. For each garment, provide metadata and a precise bounding box in PIXELS.
+IMAGE DIMENSIONS: ${imageDimensions.width}x${imageDimensions.height} pixels
 
-Format your response as a JSON array. Each object represents ONE garment and must follow this schema:
+Detect ALL garments and provide precise bounding boxes in PIXELS.
 
+Return JSON array:
 [
   {
-    "name": "string (garment type: 'T-Shirt', 'Jeans', 'Sneakers', etc.)",
-    "category": "string (Top|Bottom|Dress|Outerwear|Shoes|Accessories|Activewear|Other)",
-    "color": "string (primary color)",
-    "secondaryColors": ["array of additional colors or empty"],
-    "material": "string (cotton|denim|wool|leather|polyester|unknown)",
-    "pattern": "string (solid|striped|floral|checkered|polka-dot|geometric)",
-    "style": "string (casual|formal|sporty|elegant|business|vintage)",
-    "occasion": "string (everyday|work|party|gym|formal-event)",
-    "season": "string (summer|winter|spring|fall|all-season)",
-    "tags": "string (space-separated hashtags: '#casual #blue #summer')",
-    "notes": "string (brief description of unique features)",
-    "confidence": number (0.0-1.0, your confidence in this detection),
+    "name": "garment type (e.g., 'T-Shirt', 'Jeans', 'Sneakers')",
+    "category": "Top|Bottom|Dress|Outerwear|Shoes|Accessories|Activewear|Other",
+    "color": "primary color",
+    "secondaryColors": ["additional colors"],
+    "material": "cotton|denim|wool|leather|polyester|unknown",
+    "pattern": "solid|striped|floral|checkered|polka-dot|geometric",
+    "style": "casual|formal|sporty|elegant|business|vintage",
+    "occasion": "everyday|work|party|gym|formal-event",
+    "season": "summer|winter|spring|fall|all-season",
+    "tags": "#hashtags",
+    "notes": "brief description",
+    "confidence": 0.0-1.0,
     "boundingBox": {
-      "x": integer (left edge in pixels),
-      "y": integer (top edge in pixels),
-      "width": integer (box width in pixels),
-      "height": integer (box height in pixels)
+      "x": 0 to ${imageDimensions.width},
+      "y": 0 to ${imageDimensions.height},
+      "width": in pixels,
+      "height": in pixels
     }
   }
 ]
 
-Instructions:
-• Identify each visible garment separately
-• PAIRS (shoes, gloves, socks): ONE item with ONE box encompassing BOTH pieces
-• Bounding boxes: Add 10-15% padding around each garment
-• All pixel values must be positive integers
-• name: Simple type only (no colors/brands in the name)
-• confidence: Be honest about detection quality
+CRITICAL RULES:
+• Image is ${imageDimensions.width}x${imageDimensions.height}px
+• x + width ≤ ${imageDimensions.width}
+• y + height ≤ ${imageDimensions.height}
+• Provide the TIGHTEST possible bounding box that fully contains the entire garment
+• NO padding - box should be as tight as possible while including all visible parts
+• PAIRS (shoes): ONE box for BOTH items together
+• Integers only
+• confidence: 0.9-1.0 perfect, 0.8-0.9 clear, 0.7-0.8 partial, 0.6-0.7 edge/occluded
 
-Examples:
-• T-shirt: {"x": 152, "y": 158, "width": 496, "height": 224}
-• Shoe pair: {"x": 3, "y": 319, "width": 794, "height": 112}
-• Dress: {"x": 151, "y": 53, "width": 298, "height": 694}
-
-Return ONLY the JSON array.`
+Return ONLY JSON array.`
 
     const result = await model.generateContent([
       {
@@ -438,11 +460,18 @@ Return ONLY the JSON array.`
  */
 export async function generateCleanProductImageFromData(
   imageDataUrl: string,
-  progressCallback?: (message: string, progress: number) => void
+  progressCallback?: (message: string, progress: number) => void,
+  itemMetadata?: {
+    name?: string
+    category?: string
+    color?: string
+    material?: string
+    pattern?: string
+  }
 ): Promise<string> {
   try {
     progressCallback?.('Generating clean product image...', 10)
-    return await generateCleanProductImage(imageDataUrl, progressCallback)
+    return await generateCleanProductImage(imageDataUrl, progressCallback, itemMetadata)
   } catch (error) {
     console.error('Image generation failed:', error)
     // Return original on failure
@@ -463,7 +492,7 @@ export async function extractMultipleGarments(
 
     const ai = initializeGemini()
     const model = ai.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash-exp',
       generationConfig: {
         temperature: 0,
         topK: 1,
@@ -475,51 +504,60 @@ export async function extractMultipleGarments(
     progressCallback?.('Converting image...', 15)
     const imageData = await fileToBase64(imageFile)
 
+    // Get actual image dimensions
+    progressCallback?.('Reading image dimensions...', 20)
+    const imageDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve({ width: img.width, height: img.height })
+      img.onerror = reject
+      img.src = imageData
+    })
+
+    console.log(`📐 Image dimensions: ${imageDimensions.width}x${imageDimensions.height}px`)
+
     progressCallback?.('Analyzing photo for garments...', 30)
 
-    const multiGarmentPrompt = `You are an expert fashion AI and computer vision assistant.
+    const multiGarmentPrompt = `You are an expert fashion AI analyzing clothing items.
 
-Your task is to analyze the provided image and identify ALL distinct garments. For each garment, provide metadata and a precise bounding box in PIXELS.
+IMAGE DIMENSIONS: ${imageDimensions.width}x${imageDimensions.height} pixels
 
-Format your response as a JSON array. Each object represents ONE garment and must follow this schema:
+Detect ALL garments and provide precise bounding boxes in PIXELS.
 
+Return JSON array:
 [
   {
-    "name": "string (garment type: 'T-Shirt', 'Jeans', 'Sneakers', etc.)",
-    "category": "string (Top|Bottom|Dress|Outerwear|Shoes|Accessories|Activewear|Other)",
-    "color": "string (primary color)",
-    "secondaryColors": ["array of additional colors or empty"],
-    "material": "string (cotton|denim|wool|leather|polyester|unknown)",
-    "pattern": "string (solid|striped|floral|checkered|polka-dot|geometric)",
-    "style": "string (casual|formal|sporty|elegant|business|vintage)",
-    "occasion": "string (everyday|work|party|gym|formal-event)",
-    "season": "string (summer|winter|spring|fall|all-season)",
-    "tags": "string (space-separated hashtags: '#casual #blue #summer')",
-    "notes": "string (brief description of unique features)",
-    "confidence": number (0.0-1.0, your confidence in this detection),
+    "name": "garment type (e.g., 'T-Shirt', 'Jeans', 'Sneakers')",
+    "category": "Top|Bottom|Dress|Outerwear|Shoes|Accessories|Activewear|Other",
+    "color": "primary color",
+    "secondaryColors": ["additional colors"],
+    "material": "cotton|denim|wool|leather|polyester|unknown",
+    "pattern": "solid|striped|floral|checkered|polka-dot|geometric",
+    "style": "casual|formal|sporty|elegant|business|vintage",
+    "occasion": "everyday|work|party|gym|formal-event",
+    "season": "summer|winter|spring|fall|all-season",
+    "tags": "#hashtags",
+    "notes": "brief description",
+    "confidence": 0.0-1.0,
     "boundingBox": {
-      "x": integer (left edge in pixels),
-      "y": integer (top edge in pixels),
-      "width": integer (box width in pixels),
-      "height": integer (box height in pixels)
+      "x": 0 to ${imageDimensions.width},
+      "y": 0 to ${imageDimensions.height},
+      "width": in pixels,
+      "height": in pixels
     }
   }
 ]
 
-Instructions:
-• Identify each visible garment separately
-• PAIRS (shoes, gloves, socks): ONE item with ONE box encompassing BOTH pieces
-• Bounding boxes: Add 10-15% padding around each garment
-• All pixel values must be positive integers
-• name: Simple type only (no colors/brands in the name)
-• confidence: Be honest about detection quality
+CRITICAL RULES:
+• Image is ${imageDimensions.width}x${imageDimensions.height}px
+• x + width ≤ ${imageDimensions.width}
+• y + height ≤ ${imageDimensions.height}
+• Provide the TIGHTEST possible bounding box that fully contains the entire garment
+• NO padding - box should be as tight as possible while including all visible parts
+• PAIRS (shoes): ONE box for BOTH items together
+• Integers only
+• confidence: 0.9-1.0 perfect, 0.8-0.9 clear, 0.7-0.8 partial, 0.6-0.7 edge/occluded
 
-Examples:
-• T-shirt: {"x": 152, "y": 158, "width": 496, "height": 224}
-• Shoe pair: {"x": 3, "y": 319, "width": 794, "height": 112}
-• Dress: {"x": 151, "y": 53, "width": 298, "height": 694}
-
-Return ONLY the JSON array.`
+Return ONLY JSON array.`
 
     const result = await model.generateContent([
       {
