@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Edit, MoreVertical, Shirt, Trash2, Check, X } from 'lucide-react'
+import { Edit, Shirt, Trash2, Check, X } from 'lucide-react'
 import { useItem, useOutfits, useItems, useUpdateItem, useDeleteItem } from '@/hooks/useData'
 import { OutfitThumbnail } from '@/components/OutfitThumbnail'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/items/$itemId')({ component: ItemDetailPage })
 
@@ -16,7 +17,6 @@ function ItemDetailPage() {
   const deleteItem = useDeleteItem()
 
   const [isEditing, setIsEditing] = useState(false)
-  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [editData, setEditData] = useState({
     name: '',
     category: '',
@@ -26,8 +26,6 @@ function ItemDetailPage() {
     tags: '',
     notes: ''
   })
-
-  const moreMenuRef = useRef<HTMLDivElement>(null)
 
   // Update edit data when item loads
   useEffect(() => {
@@ -43,20 +41,6 @@ function ItemDetailPage() {
       })
     }
   }, [item])
-
-  // Close more menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
-        setShowMoreMenu(false)
-      }
-    }
-
-    if (showMoreMenu) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showMoreMenu])
 
   const handleSaveEdit = async () => {
     try {
@@ -100,6 +84,37 @@ function ItemDetailPage() {
     }
   }
 
+  // Configure unified header based on editing state
+  useSetHeader({
+    showBack: true,
+    backTo: '/wardrobe',
+    title: isEditing ? 'Editing Item' : 'Item Details',
+    pageActions: isEditing ? [
+      {
+        icon: X,
+        label: 'Cancel',
+        onClick: handleCancelEdit,
+      },
+      {
+        icon: Check,
+        label: 'Save Changes',
+        onClick: handleSaveEdit,
+      },
+    ] : [
+      {
+        icon: Edit,
+        label: 'Edit Item',
+        onClick: () => setIsEditing(true),
+      },
+      {
+        icon: Trash2,
+        label: 'Delete Item',
+        onClick: handleDelete,
+        variant: 'destructive' as const,
+      },
+    ],
+  })
+
   // Find outfits that contain this item
   const outfitsUsingItem = allOutfits?.filter(outfit =>
     outfit.itemIds.includes(itemId)
@@ -107,7 +122,7 @@ function ItemDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">Loading item...</p>
@@ -118,7 +133,7 @@ function ItemDetailPage() {
 
   if (error || !item) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 dark:text-red-400">Item not found</p>
           <button
@@ -133,76 +148,8 @@ function ItemDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate({ to: '/wardrobe' })}
-              className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              {isEditing ? 'Editing Item' : 'Item Details'}
-            </button>
-            <div className="flex items-center gap-2">
-              {isEditing ? (
-                <>
-                  <button
-                    onClick={handleCancelEdit}
-                    disabled={updateItem.isPending}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
-                    title="Cancel"
-                  >
-                    <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                  </button>
-                  <button
-                    onClick={handleSaveEdit}
-                    disabled={updateItem.isPending}
-                    className="p-2 hover:bg-green-100 dark:hover:bg-green-900 rounded-lg transition-colors disabled:opacity-50"
-                    title="Save"
-                  >
-                    <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                    title="Edit"
-                  >
-                    <Edit className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                  </button>
-                  <div className="relative" ref={moreMenuRef}>
-                    <button
-                      onClick={() => setShowMoreMenu(!showMoreMenu)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                      title="More options"
-                    >
-                      <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                    </button>
-                    {showMoreMenu && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20">
-                        <button
-                          onClick={() => {
-                            setShowMoreMenu(false)
-                            handleDelete()
-                          }}
-                          className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete Item
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
         <div className="px-4 py-6 space-y-6">
           {/* Item Photo */}
           <section className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-800">

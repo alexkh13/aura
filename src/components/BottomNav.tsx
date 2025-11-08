@@ -1,10 +1,17 @@
 import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useMatchRoute } from '@tanstack/react-router'
 import { Home, Shirt, Plus, Lightbulb, Calendar } from 'lucide-react'
 import { ActionDrawer } from './ActionDrawer'
 
 export default function BottomNav() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const matchRoute = useMatchRoute()
+
+  // Check if current route matches (including root redirect to wardrobe)
+  const isWardrobeActive = matchRoute({ to: '/wardrobe', fuzzy: true }) || matchRoute({ to: '/', fuzzy: true })
+  const isOutfitsActive = matchRoute({ to: '/outfits', fuzzy: true })
+  const isDiscoverActive = matchRoute({ to: '/discover', fuzzy: true })
+  const isCalendarActive = matchRoute({ to: '/calendar', fuzzy: true })
 
   return (
     <>
@@ -15,11 +22,11 @@ export default function BottomNav() {
           <div className="flex items-center justify-around py-1">
             <Link
               to="/wardrobe"
-              className="flex flex-col items-center gap-0.5 py-1.5 px-3 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              activeProps={{
-                className:
-                  'flex flex-col items-center gap-0.5 py-1.5 px-3 text-blue-600 dark:text-blue-400',
-              }}
+              className={`flex flex-col items-center gap-0.5 py-1.5 px-3 transition-colors ${
+                isWardrobeActive
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+              }`}
             >
               <Home className="w-5 h-5" />
               <span className="text-[10px] font-medium">Wardrobe</span>
@@ -27,11 +34,11 @@ export default function BottomNav() {
 
             <Link
               to="/outfits"
-              className="flex flex-col items-center gap-0.5 py-1.5 px-3 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              activeProps={{
-                className:
-                  'flex flex-col items-center gap-0.5 py-1.5 px-3 text-blue-600 dark:text-blue-400',
-              }}
+              className={`flex flex-col items-center gap-0.5 py-1.5 px-3 transition-colors ${
+                isOutfitsActive
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+              }`}
             >
               <Shirt className="w-5 h-5" />
               <span className="text-[10px] font-medium">Outfits</span>
@@ -48,11 +55,11 @@ export default function BottomNav() {
 
             <Link
               to="/discover"
-              className="flex flex-col items-center gap-0.5 py-1.5 px-3 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              activeProps={{
-                className:
-                  'flex flex-col items-center gap-0.5 py-1.5 px-3 text-blue-600 dark:text-blue-400',
-              }}
+              className={`flex flex-col items-center gap-0.5 py-1.5 px-3 transition-colors ${
+                isDiscoverActive
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+              }`}
             >
               <Lightbulb className="w-5 h-5" />
               <span className="text-[10px] font-medium">Discover</span>
@@ -60,11 +67,11 @@ export default function BottomNav() {
 
             <Link
               to="/calendar"
-              className="flex flex-col items-center gap-0.5 py-1.5 px-3 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              activeProps={{
-                className:
-                  'flex flex-col items-center gap-0.5 py-1.5 px-3 text-blue-600 dark:text-blue-400',
-              }}
+              className={`flex flex-col items-center gap-0.5 py-1.5 px-3 transition-colors ${
+                isCalendarActive
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+              }`}
             >
               <Calendar className="w-5 h-5" />
               <span className="text-[10px] font-medium">Calendar</span>

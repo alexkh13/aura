@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Smile } from 'lucide-react'
+import { Smile } from 'lucide-react'
 import { useState } from 'react'
 import { useCreateProfile } from '@/hooks/useData'
 import { useProfile } from '@/hooks/useProfile'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/profiles/new')({ component: NewProfilePage })
 
@@ -17,6 +18,13 @@ function NewProfilePage() {
   const [description, setDescription] = useState('')
   const [selectedEmoji, setSelectedEmoji] = useState('👔')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Configure unified header
+  useSetHeader({
+    showBack: true,
+    backTo: '/profile',
+    title: 'Create New Profile',
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,19 +57,8 @@ function NewProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <button
-            onClick={() => navigate({ to: '/profile' })}
-            className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Create New Profile
-          </button>
-        </div>
-
         <form onSubmit={handleSubmit} className="px-4 py-6 space-y-6">
           {/* Profile Icon Selection */}
           <section className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">

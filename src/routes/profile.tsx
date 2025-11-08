@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Plus, Check, User, Star, Trash2 } from 'lucide-react'
+import { Plus, Check, User, Star, Trash2 } from 'lucide-react'
 import { useProfiles, useItems, useOutfits, useDeleteProfile } from '@/hooks/useData'
 import { useProfile } from '@/hooks/useProfile'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/profile')({ component: ProfilePage })
 
@@ -10,6 +11,9 @@ function ProfilePage() {
   const { data: profiles, isLoading: profilesLoading } = useProfiles()
   const { activeProfile, setActiveProfile } = useProfile()
   const deleteProfile = useDeleteProfile()
+
+  // Configure unified header - main screen, show logo without back button
+  useSetHeader({})
 
   const handleSelectProfile = (profile: any) => {
     setActiveProfile(profile)
@@ -52,14 +56,8 @@ function ProfilePage() {
 
   if (profilesLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+      <div className="bg-gray-50 dark:bg-gray-950 pb-20">
         <div className="max-w-md mx-auto">
-          <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium">
-              <ChevronLeft className="w-5 h-5" />
-              Profiles
-            </div>
-          </div>
           <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
             Loading profiles...
           </div>
@@ -69,19 +67,8 @@ function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <button
-            onClick={() => navigate({ to: '/' })}
-            className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Profiles
-          </button>
-        </div>
-
         <div className="px-4 py-6 space-y-6">
           {/* Header Section */}
           <div className="flex items-center justify-between">

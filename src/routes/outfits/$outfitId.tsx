@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Edit, MoreVertical, Shirt, Trash2, Camera, Upload, X, Sparkles } from 'lucide-react'
+import { Edit, Shirt, Trash2, Camera, Upload, X, Sparkles } from 'lucide-react'
 import { useOutfitWithItems, useDeleteOutfit, useUpdateOutfit } from '@/hooks/useData'
 import { useState, useRef, useEffect } from 'react'
 import { generateVirtualTryOnVisualization } from '@/services/ai'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/outfits/$outfitId')({
   component: OutfitDetailPage,
@@ -14,9 +15,6 @@ function OutfitDetailPage() {
   const { data: outfit, isLoading, error } = useOutfitWithItems(outfitId)
   const deleteOutfit = useDeleteOutfit()
   const updateOutfit = useUpdateOutfit()
-
-  const [showMoreMenu, setShowMoreMenu] = useState(false)
-  const moreMenuRef = useRef<HTMLDivElement>(null)
 
   // Virtual Try-On state
   const [showVirtualTryOn, setShowVirtualTryOn] = useState(false)
@@ -42,20 +40,6 @@ function OutfitDetailPage() {
     }
   }, [outfit?.virtualTryOnImages])
 
-  // Close more menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
-        setShowMoreMenu(false)
-      }
-    }
-
-    if (showMoreMenu) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showMoreMenu])
-
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this outfit? This action cannot be undone.')) {
       return
@@ -69,6 +53,31 @@ function OutfitDetailPage() {
       alert('Failed to delete outfit')
     }
   }
+
+  // Configure unified header
+  useSetHeader({
+    showBack: true,
+    backTo: '/outfits',
+    title: 'Outfit Details',
+    pageActions: [
+      {
+        icon: Sparkles,
+        label: 'Virtual Try-On',
+        onClick: () => setShowVirtualTryOn(true),
+      },
+      {
+        icon: Edit,
+        label: 'Edit Outfit',
+        onClick: () => navigate({ to: '/outfits/$outfitId/edit', params: { outfitId } }),
+      },
+      {
+        icon: Trash2,
+        label: 'Delete Outfit',
+        onClick: handleDelete,
+        variant: 'destructive' as const,
+      },
+    ],
+  })
 
   // Virtual Try-On handlers - simplified to immediately start generation
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,7 +235,7 @@ function OutfitDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">Loading outfit...</p>
@@ -237,7 +246,7 @@ function OutfitDetailPage() {
 
   if (error || !outfit) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 dark:text-red-400">Outfit not found</p>
           <button
@@ -252,60 +261,8 @@ function OutfitDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate({ to: '/outfits' })}
-              className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              Outfit Details
-            </button>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowVirtualTryOn(true)}
-                className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg transition-colors"
-                title="Virtual Try-On"
-              >
-                <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </button>
-              <button
-                onClick={() => navigate({ to: '/outfits/$outfitId/edit', params: { outfitId } })}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                title="Edit"
-              >
-                <Edit className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-              <div className="relative" ref={moreMenuRef}>
-                <button
-                  onClick={() => setShowMoreMenu(!showMoreMenu)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                  title="More options"
-                >
-                  <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                </button>
-                {showMoreMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20">
-                    <button
-                      onClick={() => {
-                        setShowMoreMenu(false)
-                        handleDelete()
-                      }}
-                      className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete Outfit
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="px-4 py-6 space-y-6">
           {/* Swipeable Outfit Display Carousel */}
           <section

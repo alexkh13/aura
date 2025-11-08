@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate, useLocation } from '@tanstack/react-router'
-import { Shirt, ChevronLeft, X, Sparkles } from 'lucide-react'
+import { Shirt, X, Sparkles, Check } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useItems, useCreateOutfit } from '@/hooks/useData'
 import { useProfile } from '@/hooks/useProfile'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/outfits/new')({ component: CreateOutfitPage })
 
@@ -94,35 +95,30 @@ function CreateOutfitPage() {
     }
   }
 
+  // Configure unified header
+  useSetHeader({
+    showBack: true,
+    backTo: '/outfits',
+    title: 'Create New Outfit',
+    pageActions: [
+      {
+        icon: Check,
+        label: createOutfit.isPending ? 'Saving...' : 'Save Outfit',
+        onClick: handleSave,
+      },
+    ],
+  })
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate({ to: '/outfits' })}
-              className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              Create New Outfit
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 dark:bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 dark:hover:bg-blue-700 transition-colors"
-            >
-              Save
-            </button>
-          </div>
+        <div className="px-4 py-6 space-y-6">
           {aiGenerated && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-purple-600 dark:text-purple-400">
+            <div className="flex items-center gap-2 text-xs text-purple-600 dark:text-purple-400 mb-2">
               <Sparkles className="w-3 h-3" />
               AI-generated suggestions • Review and edit as needed
             </div>
           )}
-        </div>
-
-        <div className="px-4 py-6 space-y-6">
           {/* Outfit Details */}
           <section className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Outfit Details</h2>

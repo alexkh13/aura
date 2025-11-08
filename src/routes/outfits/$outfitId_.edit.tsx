@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Shirt, ChevronLeft, X } from 'lucide-react'
+import { Shirt, X, Check } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useItems, useOutfitWithItems, useUpdateOutfit } from '@/hooks/useData'
 import { useProfile } from '@/hooks/useProfile'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/outfits/$outfitId_/edit')({ component: EditOutfitPage })
 
@@ -40,16 +41,6 @@ function EditOutfitPage() {
     }
   }, [outfit])
 
-  const toggleItem = (itemId: string) => {
-    setSelectedItemIds(prev =>
-      prev.includes(itemId)
-        ? prev.filter(id => id !== itemId)
-        : [...prev, itemId]
-    )
-  }
-
-  const selectedItems = items?.filter(item => selectedItemIds.includes(item.id)) || []
-
   const handleSave = async () => {
     if (!formData.name || !formData.season) {
       alert('Please fill in the required fields: Name and Season')
@@ -81,9 +72,33 @@ function EditOutfitPage() {
     }
   }
 
+  // Configure unified header with save button
+  useSetHeader({
+    showBack: true,
+    backTo: `/outfits/${outfitId}`,
+    title: 'Edit Outfit',
+    pageActions: [
+      {
+        icon: Check,
+        label: updateOutfit.isPending ? 'Saving...' : 'Save Changes',
+        onClick: handleSave,
+      },
+    ],
+  })
+
+  const toggleItem = (itemId: string) => {
+    setSelectedItemIds(prev =>
+      prev.includes(itemId)
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    )
+  }
+
+  const selectedItems = items?.filter(item => selectedItemIds.includes(item.id)) || []
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="bg-gray-50 dark:bg-gray-950 flex items-center justify-center py-20">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">Loading outfit...</p>
@@ -94,7 +109,7 @@ function EditOutfitPage() {
 
   if (!outfit) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="bg-gray-50 dark:bg-gray-950 flex items-center justify-center py-20">
         <div className="text-center">
           <p className="text-red-600 dark:text-red-400">Outfit not found</p>
           <button
@@ -110,30 +125,8 @@ function EditOutfitPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => navigate({ to: '/outfits/$outfitId', params: { outfitId } })}
-              className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              Edit Outfit
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={updateOutfit.isPending}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {updateOutfit.isPending ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </div>
-
         <div className="px-4 py-6 space-y-6">
           {/* Outfit Details */}
           <section className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">

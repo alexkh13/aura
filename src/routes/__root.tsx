@@ -4,6 +4,7 @@ import Header from '../components/Header'
 import BottomNav from '../components/BottomNav'
 import { ThemeProvider } from '../hooks/useTheme'
 import { ProfileProvider } from '../hooks/useProfile'
+import { HeaderConfigProvider } from '../hooks/useHeaderConfig'
 import { QueryProvider } from '../providers/QueryProvider'
 
 import appCss from '../styles.css?url'
@@ -43,9 +44,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <QueryProvider>
           <ThemeProvider>
             <ProfileProvider>
-              <Header />
-              {children}
-              <BottomNav />
+              <HeaderConfigProvider>
+                <Header />
+                {children}
+                <BottomNav />
+              </HeaderConfigProvider>
             </ProfileProvider>
           </ThemeProvider>
         </QueryProvider>

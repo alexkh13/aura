@@ -1,10 +1,12 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Shirt, Sparkles, Layers, Wind } from 'lucide-react'
+import { createFileRoute } from '@tanstack/react-router'
+import { Shirt, Sparkles, Layers, Wind } from 'lucide-react'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/discover')({ component: DiscoverPage })
 
 function DiscoverPage() {
-  const navigate = useNavigate()
+  // Configure unified header - main screen, show logo without back button
+  useSetHeader({})
 
   const seasonalTrends = [
     { id: 'layered-look', name: 'Layered Look', icon: Layers, color: 'text-amber-600 dark:text-amber-400' },
@@ -91,19 +93,8 @@ function DiscoverPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <button
-            onClick={() => navigate({ to: '/' })}
-            className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Discover
-          </button>
-        </div>
-
         <div className="px-4 py-6 space-y-6">
           {/* Today's Trend */}
           <section className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950 rounded-2xl p-6 border border-amber-100 dark:border-amber-900">

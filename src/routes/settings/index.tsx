@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Bell, Lock, Palette, Database, Info, RotateCcw, Check, X, Sparkles } from 'lucide-react'
+import { ChevronRight, Bell, Lock, Palette, Database, Info, RotateCcw, Check, X, Sparkles } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
 import { useProfile } from '@/hooks/useProfile'
 import { useResetProfile } from '@/hooks/useData'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/settings/')({ component: SettingsPage })
@@ -13,6 +14,9 @@ function SettingsPage() {
   const { activeProfile } = useProfile()
   const resetProfile = useResetProfile()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+
+  // Configure unified header - main screen, show logo without back button
+  useSetHeader({})
 
   const handleResetProfile = async () => {
     if (!activeProfile) return
@@ -52,19 +56,8 @@ function SettingsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
       <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <button
-            onClick={() => navigate({ to: '/' })}
-            className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Settings
-          </button>
-        </div>
-
         <div className="px-4 py-6 space-y-6">
           {settingsSections.map((section, idx) => (
             <section key={idx}>

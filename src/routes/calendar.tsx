@@ -1,13 +1,13 @@
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { ChevronLeft, Shirt, ChevronRight } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Shirt, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { useCalendarEntries, useOutfits, useItems } from '@/hooks/useData'
 import { OutfitThumbnail } from '@/components/OutfitThumbnail'
+import { useSetHeader } from '@/hooks/useHeaderConfig'
 
 export const Route = createFileRoute('/calendar')({ component: CalendarPage })
 
 function CalendarPage() {
-  const navigate = useNavigate()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null)
 
@@ -62,32 +62,32 @@ function CalendarPage() {
 
   const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
-      <div className="max-w-md mx-auto">
-        {/* Page Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4 sticky top-16 z-10">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate({ to: '/' })}
-              className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              Calendar
-            </button>
-            <div className="flex items-center gap-3">
-              <button onClick={goToPreviousMonth} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
-                <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              </button>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[120px] text-center">{monthName}</span>
-              <button onClick={goToNextMonth} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
-                <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              </button>
-            </div>
-          </div>
-        </div>
+  // Configure unified header - main screen, show logo without back button
+  useSetHeader({
+    pageActions: [
+      {
+        icon: ChevronLeft,
+        label: 'Previous Month',
+        onClick: goToPreviousMonth,
+      },
+      {
+        icon: ChevronRight,
+        label: 'Next Month',
+        onClick: goToNextMonth,
+      },
+    ],
+  })
 
+  return (
+    <div className="bg-gray-50 dark:bg-gray-950 pb-20">
+      <div className="max-w-md mx-auto">
         <div className="px-4 py-6 space-y-6">
+          {/* Month Display */}
+          <div className="flex justify-center">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
+              {monthName}
+            </h2>
+          </div>
           {/* Calendar Grid */}
           <section className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-gray-800">
             {/* Days of Week Header */}
